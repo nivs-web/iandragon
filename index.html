@@ -621,10 +621,10 @@ const B_WINGS = [
 const FORMS = {
   A: { cols:30, rows:28, body:A_BODY, wings:A_WINGS,
        parts:{ crest:A_CREST, ridge:A_RIDGE },
-       hit:{ ox: 1, oy: 6, w: 5, h: 4 }, bound:{ l: 9, r:14, t: 9, b:12 } },
+       hit:{ ox: 1, oy: 6, w: 5, h: 4 }, bound:{ l: 9, r:14, t: 9, b:12 }, muzzle:{ x:14, y:-4 } },
   B: { cols:36, rows:32, body:B_BODY, wings:B_WINGS,
        parts:{ ridge:B_RIDGE, tail:B_TAIL },
-       hit:{ ox: 0, oy: 7, w: 6, h: 5 }, bound:{ l:11, r:17, t:13, b:15 } }
+       hit:{ ox: 0, oy: 7, w: 6, h: 5 }, bound:{ l:11, r:17, t:13, b:15 }, muzzle:{ x:16, y:-3 } }
 };
 
 /* 불 레벨 1~10 성장 테이블. 레벨마다 크기가 커지거나 파츠가 붙음 */
@@ -687,8 +687,8 @@ function drawDragon(ctx, pal, level, cx, cy, pose, flip, tint){
    플레이어
    ================================================================== */
 const PLAYER = {
-  SPEED: 700,        // 초당 700px (탄막을 빠르게 피할 수 있는 속도)
-  ACCEL: 10000,      // 700 / 0.07s => 0.07초만에 최고속 도달 (감속도 동일)
+  SPEED: 780,        // 초당 780px (탄막을 빠르게 피할 수 있는 속도)
+  ACCEL: 11200,      // 780 / 0.07s => 0.07초만에 최고속 도달 (감속도 동일)
   MARGIN: 20,        // 화면 가장자리 여백
   FLY_FPS: 0.055,    // 이동 중 날갯짓 간격
   IDLE_FPS: 0.30     // 정지 중 날갯짓 간격
@@ -775,6 +775,268 @@ class Player {
     }
     drawDragon(ctx, NOVART_PAL, this.level, this.x, this.y + bob, pose, false, null);
   }
+}
+
+/* ==================================================================
+   Phase 3 : 전투 - 파이어 블레스 / 적 / 타격감
+   ================================================================== */
+
+/* ---------------- 화면 흔들림 ---------------- */
+const Shake = {
+  x:0, y:0, t:0, dur:0, mag:0,
+  add(mag, dur){
+    if(mag >= this.mag || this.t <= 0){ this.mag = mag; this.dur = dur; this.t = dur; }
+  },
+  update(dt){
+    if(this.t <= 0){ this.x = this.y = 0; return; }
+    this.t -= dt;
+    if(this.t <= 0){ this.t = 0; this.x = this.y = 0; this.mag = 0; return; }
+    const k = this.t / this.dur;                       // 점점 잦아듦
+    const m = this.mag * k;
+    this.x = snap((Math.random()*2 - 1) * m);
+    this.y = snap((Math.random()*2 - 1) * m);
+  }
+};
+
+/* ---------------- 파티클 ---------------- */
+const MAX_PARTICLES = 520;
+const Particles = {
+  list: [],
+  spawn(x, y, n, opt){
+    opt = opt || {};
+    for(let i=0; i<n; i++){
+      if(this.list.length >= MAX_PARTICLES) return;
+      const a = (opt.ang === undefined ? Math.random()*Math.PI*2 : opt.ang + (Math.random()-0.5)*(opt.spread||1.2));
+      const sp = (opt.spd || 200) * (0.35 + Math.random()*0.9);
+      this.list.push({
+        x, y, vx: Math.cos(a)*sp, vy: Math.sin(a)*sp,
+        life: 0, max: (opt.life || 0.4) * (0.6 + Math.random()*0.8),
+        size: opt.size || (Math.random() > 0.6 ? PX*2 : PX),
+        grav: opt.grav === undefined ? 320 : opt.grav,
+        drag: opt.drag === undefined ? 2.2 : opt.drag,
+        pal: opt.pal || PAL.fire
+      });
+    }
+  },
+  update(dt){
+    for(let i=this.list.length-1; i>=0; i--){
+      const p = this.list[i];
+      p.life += dt;
+      if(p.life >= p.max){ this.list.splice(i,1); continue; }
+      const d = Math.max(0, 1 - p.drag*dt);
+      p.vx *= d; p.vy *= d;
+      p.vy += p.grav*dt;
+      p.x += p.vx*dt; p.y += p.vy*dt;
+    }
+  },
+  render(ctx){
+    for(const p of this.list){
+      const k = p.life / p.max;
+      ctx.fillStyle = p.pal[Math.min(p.pal.length-1, Math.floor(k * p.pal.length))];
+      ctx.fillRect(snap(p.x), snap(p.y), p.size, p.size);
+    }
+  },
+  clear(){ this.list.length = 0; }
+};
+
+/* ---------------- 폭발 (8프레임 도트 애니메이션) ---------------- */
+const BOOM_FRAMES = 8;
+class Boom {
+  constructor(x, y, radius, dur){
+    this.x = x; this.y = y; this.r = radius;
+    this.dur = dur || 0.36; this.t = 0; this.dead = false;
+  }
+  update(dt){ this.t += dt; if(this.t >= this.dur) this.dead = true; }
+  render(ctx){
+    const f = Math.min(BOOM_FRAMES-1, Math.floor(this.t/this.dur * BOOM_FRAMES));
+    const k = f / (BOOM_FRAMES-1);
+    const r = this.r * (0.35 + k*0.95);
+    // 바깥 링 -> 안쪽 코어 (프레임이 갈수록 색이 식음)
+    const ci = Math.min(6, Math.floor(k*6) + 1);
+    if(k < 0.75){
+      ctx.globalAlpha = 1 - k*0.35;
+      fillPixelCircle(ctx, this.x, this.y, r, PAL.fire[Math.min(6, ci+2)]);
+      fillPixelCircle(ctx, this.x, this.y, r*0.66, PAL.fire[ci]);
+      if(k < 0.45) fillPixelCircle(ctx, this.x, this.y, r*0.33, PAL.fire[0]);
+    }else{
+      ctx.globalAlpha = (1 - k) / 0.25;
+      drawPixelRing(ctx, this.x, this.y, r, PX*2, PAL.fire[6]);
+    }
+    ctx.globalAlpha = 1;
+  }
+}
+
+/* ---------------- 파이어 블레스 (자동 연사) ---------------- */
+const FIRE_INTERVAL = 0.08;                  // 초당 12.5발
+/* 레벨별 : n=갈래수 th=두께 dmg=데미지 spd=속도 pierce=관통수 len=길이 spread=확산(px/s) */
+const FIRE = [ null,
+  { n:1, th: 8, dmg:10, spd:1050, pierce:0,  len: 56, spread: 0  },  // Lv1  얇은 불줄기
+  { n:1, th:10, dmg:12, spd:1050, pierce:0,  len: 62, spread: 0  },  // Lv2
+  { n:2, th:12, dmg:12, spd:1080, pierce:0,  len: 66, spread:34  },  // Lv3  2줄로 갈라짐
+  { n:2, th:14, dmg:14, spd:1080, pierce:0,  len: 72, spread:40  },  // Lv4
+  { n:3, th:18, dmg:18, spd:1100, pierce:1,  len: 82, spread:58  },  // Lv5  굵은 1줄 + 확산
+  { n:3, th:21, dmg:21, spd:1100, pierce:1,  len: 90, spread:64  },  // Lv6
+  { n:1, th:26, dmg:28, spd:1150, pierce:3,  len:104, spread: 0  },  // Lv7  화염 기둥 (관통)
+  { n:1, th:32, dmg:34, spd:1150, pierce:4,  len:118, spread: 0  },  // Lv8
+  { n:1, th:40, dmg:42, spd:1200, pierce:6,  len:136, spread: 0  },  // Lv9
+  { n:1, th:56, dmg:56, spd:1250, pierce:99, len:172, spread: 0  }   // Lv10 거대 화염포
+];
+
+class FireBolt {
+  constructor(x, y, vy, lv){
+    const c = FIRE[lv];
+    this.x = x; this.y = y;
+    this.vx = c.spd; this.vy = vy;
+    this.th = c.th; this.len = c.len; this.dmg = c.dmg;
+    this.pierce = c.pierce; this.lv = lv;
+    this.ph = Math.random()*Math.PI*2;
+    this.t = 0; this.dead = false;
+    this.hitSet = null;                       // 관통 시 중복 타격 방지
+  }
+  get box(){ return { x:this.x - this.len, y:this.y - this.th/2, w:this.len, h:this.th }; }
+  update(dt){
+    this.t += dt;
+    this.x += this.vx*dt; this.y += this.vy*dt;
+    if(this.x - this.len > GAME_W + 40 || this.y < -80 || this.y > GAME_H + 80) this.dead = true;
+  }
+  render(ctx){
+    const L = this.len, T = this.th, seg = 8;
+    const x0 = snap(this.x - L);
+    for(let sx=0; sx<L; sx+=seg){
+      const t = sx / L;                                        // 0=꼬리, 1=머리
+      // 앞쪽이 두껍고 꼬리로 갈수록 가늘어지는 불꽃 프로파일 + 일렁임
+      const wob = 1 + Math.sin(this.t*26 + this.ph + t*6) * 0.10;
+      const prof = Math.sin(Math.PI * (0.18 + t*0.82)) * wob;
+      const h  = Math.max(PX, snap(T*prof));
+      const gx = x0 + sx, gy = snap(this.y);
+      ctx.fillStyle = PAL.fire[5]; ctx.fillRect(gx, gy - h/2, seg, h);
+      const h2 = Math.max(PX, snap(h*0.62));
+      ctx.fillStyle = PAL.fire[2]; ctx.fillRect(gx, gy - h2/2, seg, h2);
+      const h3 = Math.max(PX, snap(h*0.30));
+      ctx.fillStyle = PAL.fire[0]; ctx.fillRect(gx, gy - h3/2, seg, h3);
+    }
+  }
+}
+
+/* ---------------- 적 : 날개 좀비 ---------------- */
+const ZOMBIE_PAL = {
+  k:'#0a1408', z:'#6f9c4a', Z:'#3f5c28', R:'#ff3a2a',
+  c:'#8a7550', C:'#54452c', b:'#e8e0c8', w:'#55703a', W:'#33471f'
+};
+const Z_COLS = 20, Z_ROWS = 20, Z_CELL = 4;
+const Z_BODY = [
+  '....................','....................','....................','...kkkkk............',
+  '..kzzzzzk...........','..kRzzRzk...........','..kzzzzzk...........','..kzZZZzk...........',
+  '...kzzzk............','.kzzkzkk............','.kzzcczcck..........','..kcczcck...........',
+  '..kcCzCck...........','...kczck............','...kczck............','...kkzkk............',
+  '...kz.zk............','..kz...zk...........','..kb...bk...........','....................'
+];
+const Z_BOW = [
+  '....................','....................','....................','....................',
+  '....................','....................','.b..................','b...................',
+  'b...................','b...................','b...................','b...................',
+  'b...................','.b..................','....................','....................',
+  '....................','....................','....................','....................'
+];
+const Z_WINGS = [
+  [ // 위로
+    '....................','........kkkk........','.......kwWwwk.......','.......kwwwwwk......',
+    '........kwwwwk......','.........kwwwk......','..........kwwk......','...........kkk......',
+    '....................','....................','....................','....................',
+    '....................','....................','....................','....................',
+    '....................','....................','....................','....................'
+  ],
+  [ // 아래로
+    '....................','....................','....................','....................',
+    '....................','.........kkk........','..........kwwk......','.........kwwwwk.....',
+    '........kwwwwwk.....','........kwWwwk......','.........kkkk.......','....................',
+    '....................','....................','....................','....................',
+    '....................','....................','....................','....................'
+  ]
+];
+const Z_W = Z_COLS*Z_CELL, Z_H = Z_ROWS*Z_CELL;   // 80 x 80
+
+/* 적 화살 */
+class Arrow {
+  constructor(x, y){
+    this.x = x; this.y = y; this.vx = -340; this.dead = false;
+  }
+  get box(){ return { x:this.x, y:this.y - 5, w:38, h:10 }; }
+  update(dt){ this.x += this.vx*dt; if(this.x < -60) this.dead = true; }
+  render(ctx){
+    const x = snap(this.x), y = snap(this.y);
+    ctx.fillStyle = '#5a4a2e'; ctx.fillRect(x + 8, y - PX/2, 30, PX);       // 화살대
+    ctx.fillStyle = '#d8d2c0';                                             // 촉
+    ctx.fillRect(x, y - PX, 10, PX*2);
+    ctx.fillRect(x + 8, y - PX*2, PX, PX*4);
+    ctx.fillStyle = '#c04a3a';                                             // 깃
+    ctx.fillRect(x + 32, y - PX*2, PX*2, PX);
+    ctx.fillRect(x + 32, y + PX,   PX*2, PX);
+  }
+}
+
+class WingZombie {
+  constructor(x, y, speed){
+    this.x = x; this.y = y;
+    this.hp = 10; this.maxHp = 10;
+    this.vx = -(speed || 175); this.vy = 0;
+    this.t = Math.random()*6;
+    this.baseY = y;
+    this.animT = 0; this.wing = 0;
+    this.flash = 0; this.knock = 0;
+    this.shootT = 0.8 + Math.random()*1.4;
+    this.dead = false; this.score = 100;
+  }
+  get box(){ return { x:this.x - 26, y:this.y - 30, w:52, h:60 }; }
+  update(dt, scene){
+    this.t += dt;
+    if(this.flash > 0) this.flash -= dt;
+    // 넉백 감쇠
+    if(this.knock > 0){ this.knock = Math.max(0, this.knock - 900*dt); }
+    this.x += (this.vx + this.knock)*dt;
+    this.y = this.baseY + Math.sin(this.t*2.2)*22;
+    // 날갯짓
+    this.animT += dt;
+    if(this.animT >= 0.14){ this.animT = 0; this.wing ^= 1; }
+    // 활 쏘기 (화면 안에 들어왔을 때만)
+    if(this.x < GAME_W - 60){
+      this.shootT -= dt;
+      if(this.shootT <= 0){
+        this.shootT = 1.6 + Math.random()*1.2;
+        scene.arrows.push(new Arrow(this.x - 30, this.y + 8));
+      }
+    }
+    if(this.x < -Z_W) this.dead = true;
+  }
+  hit(dmg, bolt, scene){
+    this.hp -= dmg;
+    this.flash = 0.09;
+    this.knock = 260;
+    Shake.add(3, 0.05);
+    Particles.spawn(this.x - 10, this.y, 5, { ang:-0.2, spread:2.4, spd:260, life:0.30 });
+    if(this.hp <= 0) this.die(scene);
+  }
+  die(scene){
+    this.dead = true;
+    scene.score += this.score;
+    scene.booms.push(new Boom(this.x, this.y, 46, 0.34));
+    Particles.spawn(this.x, this.y, 14, { spd:320, life:0.5 });
+    // 뼈다귀 튀김
+    Particles.spawn(this.x, this.y, 6, { spd:280, life:0.7, grav:700, pal:['#e8e0c8','#cfc6a8','#9a9078'] });
+    Shake.add(5, 0.09);
+  }
+  render(ctx){
+    const ox = snap(this.x - Z_W/2), oy = snap(this.y - Z_H/2);
+    const tint = this.flash > 0 ? '#ffffff' : null;
+    drawGrid(ctx, Z_WINGS[this.wing], ox, oy, Z_COLS, Z_CELL, ZOMBIE_PAL, false, tint);
+    drawGrid(ctx, Z_BODY,             ox, oy, Z_COLS, Z_CELL, ZOMBIE_PAL, false, tint);
+    drawGrid(ctx, Z_BOW,              ox, oy, Z_COLS, Z_CELL, ZOMBIE_PAL, false, tint);
+  }
+}
+
+/* ---------------- AABB 충돌 ---------------- */
+function overlap(a, b){
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 }
 
 /* ==================================================================
@@ -1068,6 +1330,12 @@ class GameScene extends Scene {
       up:  (id)     => { this.stick.up(id); }
     };
 
+    // 전투 상태
+    this.bolts = []; this.enemies = []; this.arrows = []; this.booms = [];
+    this.fireT = 0; this.waveT = 1.2;
+    this.score = 0; this.kills = 0; this.hurtT = 0;
+    Particles.clear();
+
     // 배경 요소 (오른쪽 -> 왼쪽으로 흐름)
     const rnd = mulberry32(909);
     this.clouds = [];
@@ -1084,24 +1352,116 @@ class GameScene extends Scene {
   }
   exit(){ Input.pointerHandler = null; }
 
+  /* 입 끝 좌표 (불이 나오는 지점) */
+  muzzle(){
+    const p = this.player, g = growthOf(p.level), f = FORMS[g.form];
+    return { x: p.x + f.muzzle.x*g.cell, y: p.y + f.muzzle.y*g.cell };
+  }
+
   update(dt){
     this.t += dt;
-    // 가상 스틱이 잡혀 있으면 우선, 아니면 키보드/게임패드
+    const p = this.player;
+
+    // ---- 이동 ----
     const sv = this.stick.vector();
     const mv = (sv.x || sv.y) ? sv : Input.moveVector();
-    this.player.update(dt, mv);
+    p.update(dt, mv);
 
-    // 배경 스크롤 (좌측으로)
+    // ---- 파이어 블레스 (자동 연사) ----
+    const lv = p.level, c = FIRE[lv];
+    this.fireT -= dt;
+    if(this.fireT <= 0){
+      this.fireT += FIRE_INTERVAL;
+      const m = this.muzzle();
+      if(c.n === 1){
+        this.bolts.push(new FireBolt(m.x, m.y, 0, lv));
+      }else if(c.n === 2){
+        this.bolts.push(new FireBolt(m.x, m.y - 9, -c.spread, lv));
+        this.bolts.push(new FireBolt(m.x, m.y + 9,  c.spread, lv));
+      }else{
+        this.bolts.push(new FireBolt(m.x, m.y, 0, lv));
+        this.bolts.push(new FireBolt(m.x, m.y, -c.spread, lv));
+        this.bolts.push(new FireBolt(m.x, m.y,  c.spread, lv));
+      }
+      // 입 끝 불꽃
+      Particles.spawn(m.x, m.y, 2, { ang:0, spread:0.9, spd:210, life:0.16, grav:0, drag:5 });
+    }
+
+    // ---- 적 등장 웨이브 (Phase 4 에서 스테이지별 스케줄로 교체) ----
+    this.waveT -= dt;
+    if(this.waveT <= 0){
+      this.waveT = 1.5 + Math.random()*1.2;
+      const n = 1 + Math.floor(Math.random()*5);
+      const y0 = 150 + Math.random()*400;
+      for(let i=0;i<n;i++){
+        this.enemies.push(new WingZombie(
+          GAME_W + 70 + i*76,
+          clamp(y0 + (i - n/2)*56, 110, 610),
+          160 + Math.random()*70));
+      }
+    }
+
+    // ---- 갱신 ----
+    for(const b of this.bolts)   b.update(dt);
+    for(const e of this.enemies) e.update(dt, this);
+    for(const a of this.arrows)  a.update(dt);
+    for(const b of this.booms)   b.update(dt);
+    Particles.update(dt);
+    Shake.update(dt);
+    if(this.hurtT > 0) this.hurtT -= dt;
+
+    // ---- 충돌: 불 vs 적 ----
+    for(const b of this.bolts){
+      if(b.dead) continue;
+      const bb = b.box;
+      for(const e of this.enemies){
+        if(e.dead) continue;
+        if(!overlap(bb, e.box)) continue;
+        if(b.hitSet && b.hitSet.has(e)) continue;
+        e.hit(b.dmg, b, this);
+        if(e.dead) this.kills++;
+        if(b.pierce > 0){
+          b.pierce--;
+          (b.hitSet || (b.hitSet = new Set())).add(e);
+        }else{
+          b.dead = true;
+          Particles.spawn(b.x, b.y, 6, { ang:Math.PI, spread:2.0, spd:240, life:0.26 });
+          break;
+        }
+      }
+    }
+
+    // ---- 충돌: 적/화살 vs 주인공 ----
+    if(this.hurtT <= 0){
+      const hb = p.hitbox;
+      for(const a of this.arrows){
+        if(!a.dead && overlap(a.box, hb)){ a.dead = true; this.hurtPlayer(); break; }
+      }
+      if(this.hurtT <= 0){
+        for(const e of this.enemies){
+          if(!e.dead && overlap(e.box, hb)){ this.hurtPlayer(); break; }
+        }
+      }
+    }
+
+    // ---- 정리 (화면 밖 / 사망 개체 제거: 메모리 누수 방지) ----
+    this.bolts   = this.bolts.filter(o => !o.dead);
+    this.enemies = this.enemies.filter(o => !o.dead);
+    this.arrows  = this.arrows.filter(o => !o.dead);
+    this.booms   = this.booms.filter(o => !o.dead);
+
+    // ---- 배경 스크롤 ----
     this.offFar  = (this.offFar  +  55*dt) % GAME_W;
     this.offNear = (this.offNear + 150*dt) % GAME_W;
-    for(const c of this.clouds){
-      c.x -= c.sp*dt;
-      if(c.x + c.w < -20){ c.x = GAME_W + Math.random()*260; c.y = snap(40 + Math.random()*380); }
+    for(const cl of this.clouds){
+      cl.x -= cl.sp*dt;
+      if(cl.x + cl.w < -20){ cl.x = GAME_W + Math.random()*260; cl.y = snap(40 + Math.random()*380); }
     }
     for(const l of this.lines){
       l.x -= l.sp*dt;
       if(l.x + l.len < -20){ l.x = GAME_W + Math.random()*300; l.y = snap(Math.random()*GAME_H); }
     }
+
     // 성장 테스트용: [ ] 로 불 레벨 조절 (Phase 5 에서 파워업 아이템으로 대체)
     if(Input.pressed('lvup'))   this.player.setLevel(this.player.level + 1);
     if(Input.pressed('lvdown')) this.player.setLevel(this.player.level - 1);
@@ -1109,65 +1469,92 @@ class GameScene extends Scene {
     if(!this.mgr.busy && (Input.pressed('pause') || Input.pressed('back'))) this.mgr.change(new TitleScene());
   }
 
-  render(ctx){
-    ctx.drawImage(this.sky, 0, 0);
+  hurtPlayer(){
+    this.hurtT = 1.1;                       // 무적 시간 (HP/하트는 Phase 6)
+    Shake.add(10, 0.25);
+    const p = this.player;
+    Particles.spawn(p.x, p.y, 18, { spd:340, life:0.5, pal:['#fff','#ff9a5a','#ff4d5a','#8f1230'] });
+  }
 
-    // 구름 (좌측으로 흐름)
-    for(const c of this.clouds){
-      ctx.globalAlpha = c.a;
-      ctx.fillStyle = '#ffffff';
-      const x = snap(c.x);
-      ctx.fillRect(x, c.y, c.w, c.h);
-      ctx.fillRect(x + snap(c.w*0.2), c.y - PX*2, snap(c.w*0.5), PX*2);
-      ctx.fillRect(x - PX*2, c.y + c.h, snap(c.w*0.7), PX*2);
+  render(ctx){
+    // ---- 배경 (흔들림 미적용: 화면 가장자리 깨짐 방지) ----
+    ctx.drawImage(this.sky, 0, 0);
+    for(const cl of this.clouds){
+      ctx.globalAlpha = cl.a; ctx.fillStyle = '#ffffff';
+      const x = snap(cl.x);
+      ctx.fillRect(x, cl.y, cl.w, cl.h);
+      ctx.fillRect(x + snap(cl.w*0.2), cl.y - PX*2, snap(cl.w*0.5), PX*2);
+      ctx.fillRect(x - PX*2, cl.y + cl.h, snap(cl.w*0.7), PX*2);
     }
     ctx.globalAlpha = 1;
-
-    // 산 패럴랙스 (가로 스크롤 / 이음새 없이 2장 이어붙임)
     const fx = -snap(this.offFar), nx = -snap(this.offNear);
     ctx.drawImage(this.far,  fx, 0);  ctx.drawImage(this.far,  fx + GAME_W, 0);
     ctx.drawImage(this.near, nx, 0);  ctx.drawImage(this.near, nx + GAME_W, 0);
-
-    // 속도선 (전진감)
     ctx.globalAlpha = 0.22; ctx.fillStyle = '#eaffff';
     for(const l of this.lines) ctx.fillRect(snap(l.x), l.y, l.len, PX);
     ctx.globalAlpha = 1;
 
-    this.player.render(ctx);
-    this.stick.render(ctx);
+    // ---- 월드 (흔들림 적용) ----
+    ctx.save();
+    ctx.translate(Shake.x, Shake.y);
+    for(const e of this.enemies) e.render(ctx);
+    for(const a of this.arrows)  a.render(ctx);
+    for(const b of this.bolts)   b.render(ctx);
 
-    // 임시 안내 + 성장 단계 표시
-    const p2 = this.player, mt = p2.metrics, g = growthOf(p2.level);
-    drawText(ctx, 'FIRE LV ' + p2.level, 24, 22, 5,
+    const p = this.player;
+    if(this.hurtT > 0 && Math.floor(this.hurtT*18) % 2 === 0){
+      ctx.globalAlpha = 0.55; p.render(ctx); ctx.globalAlpha = 1;   // 피격 점멸
+    }else{
+      p.render(ctx);
+    }
+    Particles.render(ctx);
+    for(const b of this.booms) b.render(ctx);
+    ctx.restore();
+
+    // ---- UI (흔들림 미적용) ----
+    this.stick.render(ctx);
+    this.renderHUD(ctx);
+    if(DEBUG) this.renderDebug(ctx);
+  }
+
+  renderHUD(ctx){
+    const p = this.player, mt = p.metrics, g = growthOf(p.level);
+    drawText(ctx, 'FIRE LV ' + p.level, 24, 22, 5,
       { color:(r)=>PAL.fire[r], outline:PAL.outline, shadow:'#000', shadowOff:6 });
     drawText(ctx, g.form === 'A' ? 'HATCHLING' : 'FULL GROWN', 24, 66, 2, { color:'#dff0ff', shadow:'#0a1830' });
-    drawText(ctx, mt.w + ' X ' + mt.h + ' PX', 24, 84, 2, { color:'#9fc4e0', shadow:'#0a1830' });
-    // 레벨 게이지
     for(let i=1;i<=MAX_LEVEL;i++){
-      ctx.fillStyle = i <= p2.level ? PAL.fire[Math.min(6, 6 - Math.floor(i*0.55))] : '#20344d';
-      ctx.fillRect(24 + (i-1)*20, 104, 16, 10);
+      ctx.fillStyle = i <= p.level ? PAL.fire[Math.min(6, 6 - Math.floor(i*0.55))] : '#20344d';
+      ctx.fillRect(24 + (i-1)*20, 86, 16, 10);
     }
-    drawText(ctx, '[ ] : LEVEL UP-DOWN     ESC: TITLE', 1264, 24, 2,
-      { align:'right', color:'#dff0ff', shadow:'#0a1830' });
+    drawText(ctx, 'SCORE ' + String(this.score).padStart(7,'0'), 1264, 22, 4,
+      { align:'right', color:PAL.gold, outline:PAL.outline, shadow:'#000', shadowOff:5 });
+    drawText(ctx, 'KILL ' + this.kills, 1264, 60, 2, { align:'right', color:'#dff0ff', shadow:'#0a1830' });
+    drawText(ctx, '[ ] : LEVEL     ESC: TITLE', 1264, 700, 2,
+      { align:'right', color:'#cfe6ff', shadow:'#0a1830' });
+  }
 
-    if(DEBUG){
-      const p = this.player, hb = p.hitbox;
-      ctx.strokeStyle = '#00ff88'; ctx.lineWidth = 2;
-      ctx.strokeRect(hb.x, hb.y, hb.w, hb.h);                                    // 히트박스
-      const m = p.metrics;
-      ctx.strokeStyle = 'rgba(255,80,120,.55)';
-      ctx.strokeRect(snap(p.x - m.w/2), snap(p.y - m.h/2), m.w, m.h);            // 스프라이트 경계
-      ctx.strokeStyle = 'rgba(120,180,255,.45)';
-      ctx.strokeRect(p.x - m.bL, p.y - m.bT, m.bL + m.bR, m.bT + m.bB);           // 이동 제한 박스
-      ctx.strokeStyle = '#ffd24a';
-      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + p.vx*0.08, p.y + p.vy*0.08); ctx.stroke();
+  renderDebug(ctx){
+    const p = this.player, m = p.metrics, hb = p.hitbox;
+    ctx.save(); ctx.translate(Shake.x, Shake.y);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#00ff88'; ctx.strokeRect(hb.x, hb.y, hb.w, hb.h);
+    ctx.strokeStyle = 'rgba(255,80,120,.5)'; ctx.strokeRect(snap(p.x - m.w/2), snap(p.y - m.h/2), m.w, m.h);
+    ctx.strokeStyle = 'rgba(120,180,255,.4)'; ctx.strokeRect(p.x - m.bL, p.y - m.bT, m.bL + m.bR, m.bT + m.bB);
+    ctx.strokeStyle = '#ff4d5a';
+    for(const e of this.enemies){ const b = e.box; ctx.strokeRect(b.x, b.y, b.w, b.h); }
+    ctx.strokeStyle = '#ffd24a';
+    for(const b of this.bolts){ const bb = b.box; ctx.strokeRect(bb.x, bb.y, bb.w, bb.h); }
+    ctx.strokeStyle = '#ff9a5a';
+    for(const a of this.arrows){ const ab = a.box; ctx.strokeRect(ab.x, ab.y, ab.w, ab.h); }
+    const mz = this.muzzle();
+    ctx.fillStyle = '#00ffff'; ctx.fillRect(mz.x - 3, mz.y - 3, 6, 6);
+    ctx.restore();
 
-      const spd = Math.hypot(p.vx, p.vy);
-      drawText(ctx, 'POS ' + Math.round(p.x) + ',' + Math.round(p.y), 16, 40, 2, { color:'#00ff88' });
-      drawText(ctx, 'SPD ' + Math.round(spd) + ' / ' + PLAYER.SPEED, 16, 58, 2, { color:'#00ff88' });
-      drawText(ctx, (p.moving ? 'FLY' : 'IDLE'), 16, 76, 2, { color:'#00ff88' });
-      drawHUDDebug(ctx);
-    }
+    drawText(ctx, 'BOLT ' + this.bolts.length + '  ENEMY ' + this.enemies.length
+               + '  ARROW ' + this.arrows.length + '  PART ' + Particles.list.length, 16, 640, 2, { color:'#00ff88' });
+    drawText(ctx, 'SPD ' + Math.round(Math.hypot(p.vx,p.vy)) + ' / ' + PLAYER.SPEED
+               + '   DMG ' + FIRE[p.level].dmg + '  PIERCE ' + FIRE[p.level].pierce, 16, 658, 2, { color:'#00ff88' });
+    drawHUDDebug(ctx);
   }
 }
 
