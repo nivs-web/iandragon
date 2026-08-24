@@ -876,10 +876,10 @@ const FIRE = [ null,
   { n:2, th:14, dmg:14, spd:1080, pierce:0,  len: 72, spread:40  },  // Lv4
   { n:3, th:18, dmg:18, spd:1100, pierce:1,  len: 82, spread:58  },  // Lv5  굵은 1줄 + 확산
   { n:3, th:21, dmg:21, spd:1100, pierce:1,  len: 90, spread:64  },  // Lv6
-  { n:1, th:26, dmg:28, spd:1150, pierce:3,  len:104, spread: 0  },  // Lv7  화염 기둥 (관통)
-  { n:1, th:32, dmg:34, spd:1150, pierce:4,  len:118, spread: 0  },  // Lv8
-  { n:1, th:40, dmg:42, spd:1200, pierce:6,  len:136, spread: 0  },  // Lv9
-  { n:1, th:56, dmg:56, spd:1250, pierce:99, len:172, spread: 0  }   // Lv10 거대 화염포
+  { n:1, th:26, dmg:68, spd:1150, pierce:3,  len:104, spread: 0  },  // Lv7  화염 기둥 (관통)
+  { n:1, th:32, dmg:74, spd:1150, pierce:4,  len:118, spread: 0  },  // Lv8
+  { n:1, th:40, dmg:92, spd:1200, pierce:6,  len:136, spread: 0  },  // Lv9
+  { n:1, th:56, dmg:120,spd:1250, pierce:99, len:172, spread: 0  }   // Lv10 거대 화염포
 ];
 
 class FireBolt {
@@ -1037,6 +1037,577 @@ class WingZombie {
 /* ---------------- AABB 충돌 ---------------- */
 function overlap(a, b){
   return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+/* ==================================================================
+   Phase 4 : 적 2/3종 + 중간보스 + 최종보스 + 웨이브 시스템
+   드래곤 폼(FORM A/B)을 팔레트/셀크기/좌우반전으로 재활용하고
+   등에 태우는 "라이더" 오버레이만 따로 그려서 톤을 통일한다.
+   ================================================================== */
+
+/* ---------------- 라이더 오버레이 ----------------
+   문자 : z피부 Z그늘 r붉은눈 a갑옷 A갑옷그늘 o금장식 b뼈 K외곽    */
+const A_RIDER = [   // FORM A(30x28) 등에 앉은 작은 좀비
+  '..............................','..............................','..............................',
+  '..............................','..............................','..............................',
+  '..............................','..............KKK.............','.............KzzzK............',
+  '.............KrzrK............','.............KzZzK............','..........KKKKaaaKK...........',
+  '.........KaaaaaaaaK...........','.........KaAaaaAaK............','..........KaKKKaK.............',
+  '..........KK...KK.............','..............................','..............................',
+  '..............................','..............................','..............................',
+  '..............................','..............................','..............................',
+  '..............................','..............................','..............................',
+  '..............................'
+];
+const B_RIDER_KNIGHT = [   // FORM B(36x32) 등에 앉은 갑옷 기사
+  '....................................','....................................','....................................',
+  '....................................','..................o.................','.................ooo................',
+  '.................KoK................','..............KKKKoKKK..............','.............KaaaaaaaaK.............',
+  '.............KaarrraaK.............','.............KaaaaaaaK.............','..........KKKKaaaaaaKKKK...........',
+  '.........KaaaaaaaaaaaaaaK..........','.........KaAAaaaaaaaaAAaK..........','.........KaAAaaaaaaaaAAaK..........',
+  '..........KaaaaaaaaaaaaK...........','..........KaaKKaaaKKaaK............','...........KKK..KKK..KK............',
+  '....................................','....................................','....................................',
+  '....................................','....................................','....................................',
+  '....................................','....................................','....................................',
+  '....................................','....................................','....................................',
+  '....................................','....................................'
+];
+const B_RIDER_KING = [     // FORM B(36x32) 왕관 쓴 좀비 로드
+  '....................................','....................................','..............o.o.o.................',
+  '..............ooooo.................','.............ooooooo................','.............KoooooK................',
+  '..............KKKKK.................','.............KaaaaaK...............','.............KarrraK...............',
+  '.............KaaaaaK...............','..........KKKKaaaaaKKKK............','.........KaaaaaaaaaaaaaaK..........',
+  '.........KaAAaoooooaAAaK...........','.........KaAAaoooooaAAaK...........','.........KaaaaaaaaaaaaaK...........',
+  '..........KaaaaaaaaaaaK............','..........KaaKKaaaKKaaK............','...........KKK..KKK..KK............',
+  '....................................','....................................','....................................',
+  '....................................','....................................','....................................',
+  '....................................','....................................','....................................',
+  '....................................','....................................','....................................',
+  '....................................','....................................'
+];
+
+/* ---------------- 적 드래곤 팔레트 ---------------- */
+const RIDER_EXTRA = { z:'#7fae52', Z:'#4a6b30', r:'#ff3a2a', a:'#8790a8', A:'#4d5468', o:'#ffd24a', b:'#e8e0c8' };
+function mkPal(base){ return Object.assign({}, base, RIDER_EXTRA); }
+
+const RED_DRAGON_PAL = mkPal({          // 적2 : 작은 빨간 드래곤
+  K:'#1a0508', D:'#6b1420', M:'#93202c', L:'#c4343a', T:'#7a1a26',
+  E:'#ffd24a', H:'#fff6c2', N:'#12070a', G:'#e8c07a', S:'#d9603f',
+  C:'#f0e2c8', W:'#fff4f4', P:'#a8323a', w:'#5c1520', f:'#8a2430', k:'#2a0a10'
+});
+const PURPLE_DRAGON_PAL = mkPal({       // 적3 : 통통한 보라 드래곤
+  K:'#140820', D:'#3e2263', M:'#573083', L:'#7b46b0', T:'#452770',
+  E:'#ffe14a', H:'#fffbe0', N:'#0d0518', G:'#d8c6f0', S:'#b48ce0',
+  C:'#efe6ff', W:'#fff4f4', P:'#6a3b9e', w:'#2e1747', f:'#4a2a70', k:'#1c0d2c'
+});
+const MIDBOSS_PAL = mkPal({             // 중간보스 : 채도 낮은 회갈색
+  K:'#14110d', D:'#413a30', M:'#5a5145', L:'#776c5c', T:'#4a4238',
+  E:'#ff8a3a', H:'#ffe0c0', N:'#0e0c09', G:'#cfc4ae', S:'#9a8c74',
+  C:'#e8e0cc', W:'#fff4f4', P:'#6b6152', w:'#38312a', f:'#544a3c', k:'#1d1913'
+});
+const BOSS_PAL = mkPal({                // 최종보스 : 스테이지 테마색 (기본 심록/보라)
+  K:'#0a1410', D:'#1d4433', M:'#2b6247', L:'#3f8a5e', T:'#24513c',
+  E:'#ff2b3c', H:'#ffd9dc', N:'#071009', G:'#d8e8c0', S:'#8fd48a',
+  C:'#eaf6dc', W:'#fff4f4', P:'#356b4e', w:'#153025', f:'#245038', k:'#0d1c15'
+});
+const BOSS_PAL_RAGE = mkPal({           // HP 50% 이하에서 붉게 변함
+  K:'#1a0508', D:'#5e1622', M:'#84202e', L:'#b32f38', T:'#6d1a26',
+  E:'#ffe14a', H:'#fffbe0', N:'#12070a', G:'#ffd0c0', S:'#ff8a6a',
+  C:'#ffeadc', W:'#fff4f4', P:'#963038', w:'#43101a', f:'#6d1c28', k:'#26080e'
+});
+
+/* 폼 드래곤 1마리 그리기 (적/보스 공용) */
+function drawFormDragon(ctx, pal, formKey, cell, cx, cy, pose, flip, tint, overlays){
+  const f = FORMS[formKey];
+  const ox = snap(cx - f.cols*cell/2), oy = snap(cy - f.rows*cell/2);
+  drawGrid(ctx, f.wings[pose], ox, oy, f.cols, cell, pal, flip, tint);
+  drawGrid(ctx, f.body,        ox, oy, f.cols, cell, pal, flip, tint);
+  if(overlays) for(const L of overlays) drawGrid(ctx, L, ox, oy, f.cols, cell, pal, flip, tint);
+}
+
+/* ==================================================================
+   적 탄환
+   ================================================================== */
+class EnemyFire {                       // 드래곤 라이더의 3방향 불꽃
+  constructor(x, y, ang, spd, r){
+    this.x = x; this.y = y;
+    this.vx = Math.cos(ang)*spd; this.vy = Math.sin(ang)*spd;
+    this.r = r || 11; this.t = 0; this.dead = false;
+  }
+  get box(){ return { x:this.x - this.r, y:this.y - this.r, w:this.r*2, h:this.r*2 }; }
+  update(dt){
+    this.t += dt;
+    this.x += this.vx*dt; this.y += this.vy*dt;
+    if(this.x < -60 || this.x > GAME_W + 80 || this.y < -80 || this.y > GAME_H + 80) this.dead = true;
+  }
+  render(ctx){
+    const w = 1 + Math.sin(this.t*22)*0.12;
+    fillPixelCircle(ctx, this.x, this.y, this.r*w,      PAL.fire[5]);
+    fillPixelCircle(ctx, this.x, this.y, this.r*0.66*w, PAL.fire[2]);
+    fillPixelCircle(ctx, this.x, this.y, this.r*0.32*w, PAL.fire[0]);
+  }
+}
+
+class HomingMissile {                   // 헤비 라이더 / 보스의 유도 미사일
+  constructor(x, y, target, spd, turn){
+    this.x = x; this.y = y;
+    this.ang = Math.PI;                 // 왼쪽으로 출발
+    this.spd = spd || 260; this.turn = turn || 2.2;
+    this.target = target; this.t = 0; this.dead = false; this.life = 6;
+  }
+  get box(){ return { x:this.x - 10, y:this.y - 8, w:20, h:16 }; }
+  update(dt){
+    this.t += dt;
+    if(this.t > this.life){ this.dead = true; return; }
+    const tg = this.target;
+    if(tg){
+      const want = Math.atan2(tg.y - this.y, tg.x - this.x);
+      let d = want - this.ang;
+      while(d >  Math.PI) d -= Math.PI*2;
+      while(d < -Math.PI) d += Math.PI*2;
+      this.ang += clamp(d, -this.turn*dt, this.turn*dt);
+    }
+    this.x += Math.cos(this.ang)*this.spd*dt;
+    this.y += Math.sin(this.ang)*this.spd*dt;
+    if(this.t > 0.05 && Math.random() < 0.7)
+      Particles.spawn(this.x, this.y, 1, { spd:40, life:0.28, grav:-10, drag:4 });
+    if(this.x < -80 || this.x > GAME_W + 120 || this.y < -100 || this.y > GAME_H + 100) this.dead = true;
+  }
+  render(ctx){
+    const x = snap(this.x), y = snap(this.y);
+    const back = 14, c = Math.cos(this.ang), s = Math.sin(this.ang);
+    ctx.fillStyle = PAL.fire[2];                                   // 꼬리 불꽃
+    ctx.fillRect(snap(x - c*back), snap(y - s*back), PX*2, PX*2);
+    ctx.fillStyle = '#c9ccd8'; ctx.fillRect(x - 8, y - PX, 16, PX*2);   // 동체
+    ctx.fillStyle = '#ff4d5a'; ctx.fillRect(x + 6, y - PX, PX*2, PX*2); // 탄두
+    ctx.fillStyle = '#6b7285'; ctx.fillRect(x - 10, y - PX*2, PX, PX*4);// 꼬리날개
+  }
+}
+
+class Bomb {                            // 헤비 라이더의 투하 폭탄
+  constructor(x, y){ this.x = x; this.y = y; this.vx = -60; this.vy = 40; this.t = 0; this.dead = false; }
+  get box(){ return { x:this.x - 12, y:this.y - 12, w:24, h:24 }; }
+  update(dt, scene){
+    this.t += dt;
+    this.vy += 620*dt;
+    this.x += this.vx*dt; this.y += this.vy*dt;
+    if(this.y > GAME_H - 30 || this.t > 5){ this.explode(scene); }
+  }
+  explode(scene){
+    if(this.dead) return;
+    this.dead = true;
+    scene.booms.push(new Boom(this.x, this.y, 60, 0.42));
+    Particles.spawn(this.x, this.y, 20, { spd:380, life:0.55 });
+    Shake.add(6, 0.14);
+  }
+  render(ctx){
+    const x = snap(this.x), y = snap(this.y);
+    fillPixelCircle(ctx, x, y, 11, '#2b2f3a');
+    fillPixelCircle(ctx, x - 3, y - 3, 4, '#586074');
+    ctx.fillStyle = '#8a7550'; ctx.fillRect(x - PX/2, y - 16, PX, PX*2);       // 심지
+    ctx.fillStyle = PAL.fire[Math.floor(this.t*14) % 3]; ctx.fillRect(x - PX/2, y - 20, PX, PX);
+  }
+}
+
+class Shockwave {                       // 보스 분노 시 전체 화면 충격파
+  constructor(x, y){ this.x = x; this.y = y; this.t = 0; this.dur = 1.1; this.dead = false; this.hitDone = false; }
+  get r(){ return 60 + (this.t/this.dur) * 1500; }
+  update(dt){ this.t += dt; if(this.t >= this.dur) this.dead = true; }
+  render(ctx){
+    const k = this.t/this.dur;
+    ctx.globalAlpha = (1 - k) * 0.85;
+    drawPixelRing(ctx, this.x, this.y, this.r,        PX*4, PAL.fire[1]);
+    drawPixelRing(ctx, this.x, this.y, this.r - PX*5, PX*2, PAL.fire[4]);
+    ctx.globalAlpha = 1;
+  }
+}
+
+/* ==================================================================
+   적 공통 베이스
+   ================================================================== */
+class EnemyBase {
+  constructor(x, y, hp, score){
+    this.x = x; this.y = y; this.baseY = y;
+    this.hp = hp; this.maxHp = hp; this.score = score;
+    this.t = Math.random()*6; this.animT = 0; this.pose = 2;
+    this.flash = 0; this.knock = 0; this.dead = false;
+    this.isBoss = false;
+  }
+  flapUpdate(dt, rate){
+    this.animT += dt;
+    if(this.animT >= (rate || 0.11)){ this.animT = 0; this.pose = this.pose === 0 ? 3 : 0; }
+  }
+  hit(dmg, bolt, scene){
+    this.hp -= dmg;
+    this.flash = 0.09;
+    this.knock = this.isBoss ? 60 : 220;
+    Shake.add(this.isBoss ? 2 : 3, 0.05);
+    Particles.spawn(this.x - 12, this.y, this.isBoss ? 3 : 5, { ang:-0.2, spread:2.4, spd:260, life:0.3 });
+    if(this.hp <= 0) this.die(scene);
+  }
+  die(scene){
+    this.dead = true;
+    scene.score += this.score;
+  }
+}
+
+/* ---------------- 적2 : 드래곤 라이더 좀비 ---------------- */
+const DR_CELL = 3;                                   // FORM A x3 = 90 x 84
+class DragonRider extends EnemyBase {
+  constructor(x, y){
+    super(x, y, 30, 300);
+    this.vx = -(150 + Math.random()*50);
+    this.shootT = 1.0 + Math.random()*1.4;
+  }
+  get box(){ return { x:this.x - 32, y:this.y - 28, w:64, h:56 }; }
+  update(dt, scene){
+    this.t += dt;
+    if(this.flash > 0) this.flash -= dt;
+    if(this.knock > 0) this.knock = Math.max(0, this.knock - 900*dt);
+    this.x += (this.vx + this.knock)*dt;
+    this.y = this.baseY + Math.sin(this.t*1.7)*30;
+    this.flapUpdate(dt, 0.10);
+    if(this.x < GAME_W - 80){
+      this.shootT -= dt;
+      if(this.shootT <= 0){
+        this.shootT = 2.2 + Math.random()*0.9;
+        // 3방향 불꽃 (중앙 + 상하 30도)
+        for(const a of [-Math.PI/6, 0, Math.PI/6])
+          scene.eshots.push(new EnemyFire(this.x - 34, this.y + 6, Math.PI + a, 330, 11));
+      }
+    }
+    if(this.x < -120) this.dead = true;
+  }
+  die(scene){
+    super.die(scene);
+    scene.booms.push(new Boom(this.x, this.y, 66, 0.42));
+    Particles.spawn(this.x, this.y, 20, { spd:360, life:0.55 });
+    Particles.spawn(this.x, this.y, 8, { spd:300, life:0.7, grav:700, pal:['#e8e0c8','#cfc6a8','#9a9078'] });
+    Shake.add(7, 0.13);
+  }
+  render(ctx){
+    drawFormDragon(ctx, RED_DRAGON_PAL, 'A', DR_CELL, this.x, this.y, this.pose, true,
+      this.flash > 0 ? '#ffffff' : null, [A_RIDER]);
+  }
+}
+
+/* ---------------- 적3 : 헤비 드래곤 라이더 ---------------- */
+const HV_CELL = 4;                                   // FORM A x4 = 120 x 112
+class HeavyRider extends EnemyBase {
+  constructor(x, y){
+    super(x, y, 80, 800);
+    this.vx = -(95 + Math.random()*35);
+    this.missileT = 1.6 + Math.random()*1.0;
+    this.bombT    = 2.6 + Math.random()*1.2;
+  }
+  get box(){ return { x:this.x - 44, y:this.y - 36, w:88, h:72 }; }
+  update(dt, scene){
+    this.t += dt;
+    if(this.flash > 0) this.flash -= dt;
+    if(this.knock > 0) this.knock = Math.max(0, this.knock - 900*dt);
+    // 화면 안으로 들어오면 감속해서 버팀
+    if(this.x < GAME_W - 260) this.vx = Math.min(0, this.vx + 40*dt);
+    this.x += (this.vx + this.knock)*dt;
+    this.y = this.baseY + Math.sin(this.t*1.2)*38;
+    this.flapUpdate(dt, 0.13);
+    if(this.x < GAME_W - 60){
+      this.missileT -= dt;
+      if(this.missileT <= 0){
+        this.missileT = 2.6 + Math.random()*1.0;
+        scene.missiles.push(new HomingMissile(this.x - 46, this.y, scene.player, 250, 1.9));
+      }
+      this.bombT -= dt;
+      if(this.bombT <= 0){
+        this.bombT = 3.2 + Math.random()*1.4;
+        scene.bombs.push(new Bomb(this.x, this.y + 30));
+      }
+    }
+    if(this.x < -160) this.dead = true;
+  }
+  die(scene){
+    super.die(scene);
+    scene.booms.push(new Boom(this.x, this.y, 92, 0.52));
+    Particles.spawn(this.x, this.y, 30, { spd:430, life:0.65 });
+    // 파편 8방향
+    for(let i=0;i<8;i++)
+      Particles.spawn(this.x, this.y, 3, { ang:i*Math.PI/4, spread:0.35, spd:420, life:0.8,
+        grav:520, pal:['#efe6ff','#b48ce0','#573083'] });
+    Shake.add(10, 0.2);
+  }
+  render(ctx){
+    drawFormDragon(ctx, PURPLE_DRAGON_PAL, 'A', HV_CELL, this.x, this.y, this.pose, true,
+      this.flash > 0 ? '#ffffff' : null, [A_RIDER]);
+  }
+}
+
+/* ---------------- 중간보스 : 드래곤 나이트 ---------------- */
+const MB_CELL = 6;                                   // FORM B x6 = 216 x 192
+class MidBoss extends EnemyBase {
+  constructor(stage){
+    super(GAME_W + 180, GAME_H/2, 1400 + (stage-1)*420, 5000);
+    this.isBoss = true; this.name = 'DRAGON KNIGHT';
+    this.phase = 'enter'; this.pt = 0; this.pi = 0;
+    this.homeX = GAME_W - 230; this.homeY = GAME_H/2;
+    this.enraged = false;
+    this.breathN = 0; this.breathT = 0;
+  }
+  get box(){ return { x:this.x - 82, y:this.y - 70, w:164, h:140 }; }
+  get rate(){ return this.enraged ? 1.5 : 1; }
+  update(dt, scene){
+    this.t += dt;
+    if(this.flash > 0) this.flash -= dt;
+    if(!this.enraged && this.hp <= this.maxHp*0.5){
+      this.enraged = true;
+      Shake.add(8, 0.3);
+      Particles.spawn(this.x, this.y, 26, { spd:400, life:0.6 });
+    }
+    this.flapUpdate(dt, 0.15);
+    this.pt += dt * (this.phase === 'enter' ? 1 : this.rate);
+
+    switch(this.phase){
+      case 'enter':
+        this.x += (this.homeX - this.x) * Math.min(1, 1.6*dt);
+        this.y = this.homeY + Math.sin(this.t*1.1)*40;
+        if(Math.abs(this.x - this.homeX) < 6){ this.phase = 'idle'; this.pt = 0; }
+        break;
+      case 'idle':                                    // 잠깐 부유하다 다음 패턴
+        this.y = this.homeY + Math.sin(this.t*1.1)*40;
+        if(this.pt > 1.0){ this.nextPattern(scene); }
+        break;
+      case 'breath':                                  // 패턴1 : 3연속 화염 브레스
+        this.y = this.homeY + Math.sin(this.t*1.1)*40;
+        this.breathT -= dt * this.rate;
+        if(this.breathT <= 0 && this.breathN > 0){
+          this.breathN--; this.breathT = 0.55;
+          for(let i=0;i<7;i++)
+            scene.eshots.push(new EnemyFire(this.x - 92, this.y + 10 + (i-3)*4,
+              Math.PI + (i-3)*0.055, 420 + i*6, 15));
+          Shake.add(3, 0.08);
+        }
+        if(this.breathN <= 0 && this.breathT <= -0.6){ this.phase = 'idle'; this.pt = 0; }
+        break;
+      case 'wind': {                                  // 패턴2 : 날개 바람 (주인공 밀어냄)
+        this.y = this.homeY + Math.sin(this.t*2.4)*26;
+        const p = scene.player;
+        p.x -= 300*dt;                                 // 왼쪽으로 밀림
+        if(Math.random() < 0.6)
+          Particles.spawn(this.x - 90, this.y + (Math.random()-0.5)*180, 1,
+            { ang:Math.PI, spread:0.25, spd:520, life:0.42, grav:0, drag:0.6,
+              pal:['#ffffff','#dfe9ff','#9fb6d8'] });
+        if(this.pt > 1.8){ this.phase = 'idle'; this.pt = 0; }
+        break;
+      }
+      case 'dash': {                                  // 패턴3 : 돌진 (좌 -> 우 복귀)
+        const k = this.pt / 1.5;
+        if(k < 0.55){
+          this.x -= 1250*dt;
+          if(this.x < -140) this.x = -140;
+        }else{
+          this.x += (this.homeX - this.x) * Math.min(1, 2.4*dt);
+        }
+        this.y += (scene.player.y - this.y) * Math.min(1, 1.2*dt);
+        if(this.pt > 1.6){ this.phase = 'idle'; this.pt = 0; }
+        break;
+      }
+    }
+  }
+  nextPattern(scene){
+    const seq = ['breath','wind','dash'];
+    this.phase = seq[this.pi % seq.length]; this.pi++;
+    this.pt = 0;
+    if(this.phase === 'breath'){ this.breathN = 3; this.breathT = 0.2; }
+    if(this.phase === 'dash')  Shake.add(4, 0.2);
+  }
+  die(scene){
+    super.die(scene);
+    scene.onBossKilled(this);
+  }
+  render(ctx){
+    const tint = this.flash > 0 ? '#ffffff' : (this.enraged && Math.floor(this.t*5)%2 === 0 ? '#8f4a3a' : null);
+    drawFormDragon(ctx, MIDBOSS_PAL, 'B', MB_CELL, this.x, this.y, this.pose, true, tint, [B_RIDER_KNIGHT]);
+  }
+}
+
+/* ---------------- 최종보스 : 좀비 드래곤 로드 ---------------- */
+const BOSS_CELL = 9;                                 // FORM B x9 = 324 x 288 (화면 1/4)
+class Boss extends EnemyBase {
+  constructor(stage){
+    super(GAME_W + 280, GAME_H/2, 2000 + (stage-1)*620, 12000);
+    this.isBoss = true; this.name = 'ZOMBIE DRAGON LORD';
+    this.phase = 'enter'; this.pt = 0; this.pi = 0;
+    this.homeX = GAME_W - 250; this.homeY = GAME_H/2;
+    this.enraged = false;
+    this.swirlN = 0; this.swirlT = 0; this.swirlA = 0;
+  }
+  get box(){ return { x:this.x - 120, y:this.y - 104, w:240, h:208 }; }
+  get rate(){ return this.enraged ? 1.35 : 1; }
+  update(dt, scene){
+    this.t += dt;
+    if(this.flash > 0) this.flash -= dt;
+    if(!this.enraged && this.hp <= this.maxHp*0.5){
+      this.enraged = true;
+      Shake.add(12, 0.5);
+      scene.waves.push(new Shockwave(this.x, this.y));
+      Particles.spawn(this.x, this.y, 40, { spd:520, life:0.8 });
+    }
+    this.flapUpdate(dt, 0.17);
+    this.pt += dt * (this.phase === 'enter' ? 1 : this.rate);
+
+    switch(this.phase){
+      case 'enter':
+        this.x += (this.homeX - this.x) * Math.min(1, 1.3*dt);
+        this.y = this.homeY + Math.sin(this.t*0.9)*34;
+        if(Math.abs(this.x - this.homeX) < 8){ this.phase = 'idle'; this.pt = 0; }
+        break;
+      case 'idle':
+        this.y = this.homeY + Math.sin(this.t*0.9)*34;
+        if(this.pt > 0.9) this.nextPattern(scene);
+        break;
+      case 'swirl':                                   // 패턴1 : 화염 브레스 소용돌이
+        this.y = this.homeY + Math.sin(this.t*0.9)*34;
+        this.swirlT -= dt * this.rate;
+        if(this.swirlT <= 0 && this.swirlN > 0){
+          this.swirlN--; this.swirlT = 0.09;
+          this.swirlA += 0.42;
+          for(let i=0;i<3;i++){
+            const a = Math.PI + Math.sin(this.swirlA)*0.85 + i*Math.PI*2/3*0.16;
+            scene.eshots.push(new EnemyFire(this.x - 110, this.y, a, 360, 13));
+          }
+        }
+        if(this.swirlN <= 0 && this.swirlT < -0.5){ this.phase = 'idle'; this.pt = 0; }
+        break;
+      case 'missile':                                 // 패턴2 : 미사일 10발
+        this.y = this.homeY + Math.sin(this.t*0.9)*34;
+        if(this.pt > 0.5 && !this.fired){
+          this.fired = true;
+          for(let i=0;i<10;i++){
+            const m = new HomingMissile(this.x - 90, this.y - 90 + i*20, scene.player, 230 + i*8, 1.6);
+            m.t = -i*0.06;                            // 약간씩 시차를 두고 유도 시작
+            scene.missiles.push(m);
+          }
+          Shake.add(5, 0.15);
+        }
+        if(this.pt > 1.4){ this.phase = 'idle'; this.pt = 0; this.fired = false; }
+        break;
+      case 'charge': {                                // 패턴3 : 몸통 박치기
+        const k = this.pt / 1.8;
+        if(k < 0.25){
+          this.x += 90*dt;                            // 살짝 뒤로 뺐다가
+        }else if(k < 0.62){
+          this.x -= 1150*dt;
+          if(this.x < -180) this.x = -180;
+          if(Math.random() < 0.5) Particles.spawn(this.x + 90, this.y + (Math.random()-0.5)*180, 1,
+            { spd:200, life:0.3, grav:0 });
+        }else{
+          this.x += (this.homeX - this.x) * Math.min(1, 2.2*dt);
+        }
+        this.y += (scene.player.y - this.y) * Math.min(1, 1.0*dt);
+        if(this.pt > 1.9){ this.phase = 'idle'; this.pt = 0; }
+        break;
+      }
+      case 'summon':                                  // 패턴4 : 일반 적 소환
+        this.y = this.homeY + Math.sin(this.t*0.9)*34;
+        if(this.pt > 0.4 && !this.fired){
+          this.fired = true;
+          const n = 3 + Math.floor(Math.random()*3);
+          for(let i=0;i<n;i++)
+            scene.enemies.push(new WingZombie(this.x - 40 + i*30,
+              clamp(this.y - 90 + i*60, 110, 610), 210 + Math.random()*60));
+          Particles.spawn(this.x - 60, this.y, 20, { spd:300, life:0.5,
+            pal:['#d8ffd0','#8fd48a','#3f8a5e','#1d4433'] });
+        }
+        if(this.pt > 1.2){ this.phase = 'idle'; this.pt = 0; this.fired = false; }
+        break;
+    }
+
+    // 분노 상태에서는 주기적으로 전체 화면 충격파 추가
+    if(this.enraged){
+      this.shockT = (this.shockT === undefined ? 4.5 : this.shockT) - dt;
+      if(this.shockT <= 0){ this.shockT = 5.5; scene.waves.push(new Shockwave(this.x, this.y)); Shake.add(7, 0.25); }
+    }
+  }
+  nextPattern(scene){
+    const seq = ['swirl','missile','charge','summon'];
+    this.phase = seq[this.pi % seq.length]; this.pi++;
+    this.pt = 0; this.fired = false;
+    if(this.phase === 'swirl'){ this.swirlN = 26; this.swirlT = 0.2; this.swirlA = 0; }
+  }
+  die(scene){
+    super.die(scene);
+    scene.onBossKilled(this);
+  }
+  render(ctx){
+    const pal = this.enraged ? BOSS_PAL_RAGE : BOSS_PAL;
+    drawFormDragon(ctx, pal, 'B', BOSS_CELL, this.x, this.y, this.pose, true,
+      this.flash > 0 ? '#ffffff' : null, [B_RIDER_KING]);
+  }
+}
+
+/* ==================================================================
+   웨이브 디렉터 : 90초 타임라인
+   ================================================================== */
+const TIMELINE = [
+  { t: 1.5, k:'zombie', n:3 }, { t: 5.0, k:'zombie', n:4 }, { t: 8.5, k:'zombie', n:5 },
+  { t:12.0, k:'rider',  n:1 }, { t:15.0, k:'zombie', n:4 }, { t:18.5, k:'rider',  n:2 },
+  { t:22.0, k:'zombie', n:5 }, { t:25.0, k:'heavy',  n:1 }, { t:28.5, k:'rider',  n:2 },
+  { t:32.0, k:'zombie', n:5 }, { t:35.0, k:'heavy',  n:1 }, { t:38.0, k:'rider',  n:2 },
+  { t:41.0, k:'zombie', n:5 }, { t:43.0, k:'heavy',  n:1 },
+  { t:45.0, k:'midboss' }
+];
+const BOSS_FORCE_T = 80;        // 이 시각이 되면 중간보스 상태와 무관하게 최종보스 등장
+const BOSS_AFTER_MID = 10;      // 중간보스 처치 후 대기 시간
+
+class Director {
+  constructor(scene, stage){
+    this.s = scene; this.stage = stage || 1;
+    this.t = 0; this.idx = 0;
+    this.midKilledAt = -1; this.bossSpawned = false; this.midSpawned = false;
+  }
+  update(dt){
+    this.t += dt;
+    const s = this.s;
+    // 스크립트 소화
+    while(this.idx < TIMELINE.length && this.t >= TIMELINE[this.idx].t){
+      const e = TIMELINE[this.idx++];
+      if(e.k === 'midboss'){ this.spawnMid(); }
+      else this.spawnGroup(e.k, e.n);
+    }
+    // 최종보스 등장 조건
+    if(!this.bossSpawned){
+      const afterMid = this.midKilledAt >= 0 && this.t - this.midKilledAt >= BOSS_AFTER_MID;
+      if(afterMid || this.t >= BOSS_FORCE_T) this.spawnBoss();
+    }
+  }
+  spawnGroup(kind, n){
+    const s = this.s;
+    const y0 = 150 + Math.random()*380;
+    for(let i=0;i<n;i++){
+      const y = clamp(y0 + (i - n/2)*58, 110, 610);
+      const x = GAME_W + 80 + i*78;
+      if(kind === 'zombie')     s.enemies.push(new WingZombie(x, y, 160 + Math.random()*70));
+      else if(kind === 'rider') s.enemies.push(new DragonRider(x, y));
+      else if(kind === 'heavy') s.enemies.push(new HeavyRider(x, y));
+    }
+  }
+  spawnMid(){
+    if(this.midSpawned) return;
+    this.midSpawned = true;
+    const b = new MidBoss(this.stage);
+    this.s.enemies.push(b); this.s.boss = b;
+    this.s.bossBannerT = 2.2;
+    Shake.add(6, 0.4);
+  }
+  spawnBoss(){
+    if(this.bossSpawned) return;
+    this.bossSpawned = true;
+    const b = new Boss(this.stage);
+    this.s.enemies.push(b); this.s.boss = b;
+    this.s.bossBannerT = 2.6;
+    Shake.add(9, 0.6);
+  }
+  onBossKilled(b){
+    if(b instanceof MidBoss) this.midKilledAt = this.t;
+  }
 }
 
 /* ==================================================================
@@ -1316,7 +1887,7 @@ const SKY_TEST = [
 
 class GameScene extends Scene {
   enter(){
-    this.t = 0;
+    this.t = 0; this.stage = 1;
     this.sky  = buildSky(SKY_TEST);
     this.far  = buildRidge(2024, 596, 132, 24, '#7d9ec4', '#4d6a99', '#3a5178');
     this.near = buildRidge(7788, 706,  86, 42, '#3f6b52', '#1e3b31', '#12251e');
@@ -1332,30 +1903,35 @@ class GameScene extends Scene {
 
     // 전투 상태
     this.bolts = []; this.enemies = []; this.arrows = []; this.booms = [];
-    this.fireT = 0; this.waveT = 1.2;
-    this.score = 0; this.kills = 0; this.hurtT = 0;
+    this.eshots = []; this.missiles = []; this.bombs = []; this.waves = [];
+    this.fireT = 0; this.score = 0; this.kills = 0; this.hurtT = 0;
+    this.boss = null; this.bossBannerT = 0;
+    this.director = new Director(this, this.stage);
     Particles.clear();
 
-    // 배경 요소 (오른쪽 -> 왼쪽으로 흐름)
     const rnd = mulberry32(909);
     this.clouds = [];
-    for(let i=0;i<12;i++){
-      this.clouds.push({
-        x: rnd()*GAME_W, y: snap(40 + rnd()*380),
-        w: snap(90 + rnd()*210), h: snap(12 + rnd()*16),
-        sp: 34 + rnd()*58, a: 0.16 + rnd()*0.22
-      });
-    }
+    for(let i=0;i<12;i++)
+      this.clouds.push({ x: rnd()*GAME_W, y: snap(40 + rnd()*380),
+        w: snap(90 + rnd()*210), h: snap(12 + rnd()*16), sp: 34 + rnd()*58, a: 0.16 + rnd()*0.22 });
     this.lines = [];
     for(let i=0;i<34;i++)
       this.lines.push({ x: rnd()*GAME_W, y: snap(rnd()*GAME_H), len: snap(24+rnd()*52), sp: 620+rnd()*520 });
   }
   exit(){ Input.pointerHandler = null; }
 
-  /* 입 끝 좌표 (불이 나오는 지점) */
   muzzle(){
     const p = this.player, g = growthOf(p.level), f = FORMS[g.form];
     return { x: p.x + f.muzzle.x*g.cell, y: p.y + f.muzzle.y*g.cell };
+  }
+  onBossKilled(b){
+    this.director.onBossKilled(b);
+    if(this.boss === b) this.boss = null;
+    // 2~3초간 연속 폭발
+    const big = !(b instanceof MidBoss);
+    this.bossDeathT = big ? 3.0 : 2.0;
+    this.bossDeathX = b.x; this.bossDeathY = b.y; this.bossDeathR = big ? 150 : 100;
+    Shake.add(big ? 16 : 11, big ? 1.0 : 0.6);
   }
 
   update(dt){
@@ -1367,15 +1943,14 @@ class GameScene extends Scene {
     const mv = (sv.x || sv.y) ? sv : Input.moveVector();
     p.update(dt, mv);
 
-    // ---- 파이어 블레스 (자동 연사) ----
+    // ---- 파이어 블레스 ----
     const lv = p.level, c = FIRE[lv];
     this.fireT -= dt;
     if(this.fireT <= 0){
       this.fireT += FIRE_INTERVAL;
       const m = this.muzzle();
-      if(c.n === 1){
-        this.bolts.push(new FireBolt(m.x, m.y, 0, lv));
-      }else if(c.n === 2){
+      if(c.n === 1) this.bolts.push(new FireBolt(m.x, m.y, 0, lv));
+      else if(c.n === 2){
         this.bolts.push(new FireBolt(m.x, m.y - 9, -c.spread, lv));
         this.bolts.push(new FireBolt(m.x, m.y + 9,  c.spread, lv));
       }else{
@@ -1383,29 +1958,34 @@ class GameScene extends Scene {
         this.bolts.push(new FireBolt(m.x, m.y, -c.spread, lv));
         this.bolts.push(new FireBolt(m.x, m.y,  c.spread, lv));
       }
-      // 입 끝 불꽃
       Particles.spawn(m.x, m.y, 2, { ang:0, spread:0.9, spd:210, life:0.16, grav:0, drag:5 });
     }
 
-    // ---- 적 등장 웨이브 (Phase 4 에서 스테이지별 스케줄로 교체) ----
-    this.waveT -= dt;
-    if(this.waveT <= 0){
-      this.waveT = 1.5 + Math.random()*1.2;
-      const n = 1 + Math.floor(Math.random()*5);
-      const y0 = 150 + Math.random()*400;
-      for(let i=0;i<n;i++){
-        this.enemies.push(new WingZombie(
-          GAME_W + 70 + i*76,
-          clamp(y0 + (i - n/2)*56, 110, 610),
-          160 + Math.random()*70));
+    // ---- 웨이브 ----
+    this.director.update(dt);
+    if(this.bossBannerT > 0) this.bossBannerT -= dt;
+
+    // 보스 폭사 연출 (연속 폭발)
+    if(this.bossDeathT > 0){
+      this.bossDeathT -= dt;
+      if(Math.random() < 0.55){
+        const r = this.bossDeathR;
+        this.booms.push(new Boom(this.bossDeathX + (Math.random()-0.5)*r*1.6,
+                                 this.bossDeathY + (Math.random()-0.5)*r*1.4,
+                                 30 + Math.random()*46, 0.4));
+        Shake.add(6, 0.12);
       }
     }
 
     // ---- 갱신 ----
-    for(const b of this.bolts)   b.update(dt);
-    for(const e of this.enemies) e.update(dt, this);
-    for(const a of this.arrows)  a.update(dt);
-    for(const b of this.booms)   b.update(dt);
+    for(const b of this.bolts)    b.update(dt);
+    for(const e of this.enemies)  e.update(dt, this);
+    for(const a of this.arrows)   a.update(dt);
+    for(const e of this.eshots)   e.update(dt);
+    for(const m of this.missiles) m.update(dt);
+    for(const b of this.bombs)    b.update(dt, this);
+    for(const w of this.waves)    w.update(dt);
+    for(const b of this.booms)    b.update(dt);
     Particles.update(dt);
     Shake.update(dt);
     if(this.hurtT > 0) this.hurtT -= dt;
@@ -1420,10 +2000,8 @@ class GameScene extends Scene {
         if(b.hitSet && b.hitSet.has(e)) continue;
         e.hit(b.dmg, b, this);
         if(e.dead) this.kills++;
-        if(b.pierce > 0){
-          b.pierce--;
-          (b.hitSet || (b.hitSet = new Set())).add(e);
-        }else{
+        if(b.pierce > 0){ b.pierce--; (b.hitSet || (b.hitSet = new Set())).add(e); }
+        else {
           b.dead = true;
           Particles.spawn(b.x, b.y, 6, { ang:Math.PI, spread:2.0, spd:240, life:0.26 });
           break;
@@ -1431,26 +2009,43 @@ class GameScene extends Scene {
       }
     }
 
-    // ---- 충돌: 적/화살 vs 주인공 ----
+    // ---- 충돌: 적 공격 vs 주인공 ----
     if(this.hurtT <= 0){
       const hb = p.hitbox;
-      for(const a of this.arrows){
-        if(!a.dead && overlap(a.box, hb)){ a.dead = true; this.hurtPlayer(); break; }
+      const lists = [this.arrows, this.eshots, this.missiles, this.bombs];
+      let struck = false;
+      for(const list of lists){
+        for(const o of list){
+          if(o.dead || !overlap(o.box, hb)) continue;
+          if(o instanceof Bomb) o.explode(this); else o.dead = true;
+          struck = true; break;
+        }
+        if(struck) break;
       }
-      if(this.hurtT <= 0){
-        for(const e of this.enemies){
-          if(!e.dead && overlap(e.box, hb)){ this.hurtPlayer(); break; }
+      if(!struck){
+        for(const e of this.enemies){ if(!e.dead && overlap(e.box, hb)){ struck = true; break; } }
+      }
+      if(!struck){
+        for(const w of this.waves){
+          if(w.hitDone) continue;
+          const d = Math.hypot(p.x - w.x, p.y - w.y);
+          if(Math.abs(d - w.r) < 30){ w.hitDone = true; struck = true; break; }
         }
       }
+      if(struck) this.hurtPlayer();
     }
 
-    // ---- 정리 (화면 밖 / 사망 개체 제거: 메모리 누수 방지) ----
-    this.bolts   = this.bolts.filter(o => !o.dead);
-    this.enemies = this.enemies.filter(o => !o.dead);
-    this.arrows  = this.arrows.filter(o => !o.dead);
-    this.booms   = this.booms.filter(o => !o.dead);
+    // ---- 정리 ----
+    this.bolts    = this.bolts.filter(o => !o.dead);
+    this.enemies  = this.enemies.filter(o => !o.dead);
+    this.arrows   = this.arrows.filter(o => !o.dead);
+    this.eshots   = this.eshots.filter(o => !o.dead);
+    this.missiles = this.missiles.filter(o => !o.dead);
+    this.bombs    = this.bombs.filter(o => !o.dead);
+    this.waves    = this.waves.filter(o => !o.dead);
+    this.booms    = this.booms.filter(o => !o.dead);
 
-    // ---- 배경 스크롤 ----
+    // ---- 배경 ----
     this.offFar  = (this.offFar  +  55*dt) % GAME_W;
     this.offNear = (this.offNear + 150*dt) % GAME_W;
     for(const cl of this.clouds){
@@ -1462,22 +2057,20 @@ class GameScene extends Scene {
       if(l.x + l.len < -20){ l.x = GAME_W + Math.random()*300; l.y = snap(Math.random()*GAME_H); }
     }
 
-    // 성장 테스트용: [ ] 로 불 레벨 조절 (Phase 5 에서 파워업 아이템으로 대체)
-    if(Input.pressed('lvup'))   this.player.setLevel(this.player.level + 1);
-    if(Input.pressed('lvdown')) this.player.setLevel(this.player.level - 1);
-
+    if(Input.pressed('lvup'))   p.setLevel(p.level + 1);
+    if(Input.pressed('lvdown')) p.setLevel(p.level - 1);
     if(!this.mgr.busy && (Input.pressed('pause') || Input.pressed('back'))) this.mgr.change(new TitleScene());
   }
 
   hurtPlayer(){
-    this.hurtT = 1.1;                       // 무적 시간 (HP/하트는 Phase 6)
+    this.hurtT = 1.1;
     Shake.add(10, 0.25);
     const p = this.player;
     Particles.spawn(p.x, p.y, 18, { spd:340, life:0.5, pal:['#fff','#ff9a5a','#ff4d5a','#8f1230'] });
   }
 
   render(ctx){
-    // ---- 배경 (흔들림 미적용: 화면 가장자리 깨짐 방지) ----
+    // 배경
     ctx.drawImage(this.sky, 0, 0);
     for(const cl of this.clouds){
       ctx.globalAlpha = cl.a; ctx.fillStyle = '#ffffff';
@@ -1494,31 +2087,33 @@ class GameScene extends Scene {
     for(const l of this.lines) ctx.fillRect(snap(l.x), l.y, l.len, PX);
     ctx.globalAlpha = 1;
 
-    // ---- 월드 (흔들림 적용) ----
+    // 월드 (흔들림)
     ctx.save();
     ctx.translate(Shake.x, Shake.y);
-    for(const e of this.enemies) e.render(ctx);
-    for(const a of this.arrows)  a.render(ctx);
-    for(const b of this.bolts)   b.render(ctx);
+    for(const e of this.enemies)  e.render(ctx);
+    for(const a of this.arrows)   a.render(ctx);
+    for(const e of this.eshots)   e.render(ctx);
+    for(const m of this.missiles) m.render(ctx);
+    for(const b of this.bombs)    b.render(ctx);
+    for(const b of this.bolts)    b.render(ctx);
 
     const p = this.player;
     if(this.hurtT > 0 && Math.floor(this.hurtT*18) % 2 === 0){
-      ctx.globalAlpha = 0.55; p.render(ctx); ctx.globalAlpha = 1;   // 피격 점멸
-    }else{
-      p.render(ctx);
-    }
+      ctx.globalAlpha = 0.55; p.render(ctx); ctx.globalAlpha = 1;
+    }else p.render(ctx);
+
     Particles.render(ctx);
+    for(const w of this.waves) w.render(ctx);
     for(const b of this.booms) b.render(ctx);
     ctx.restore();
 
-    // ---- UI (흔들림 미적용) ----
     this.stick.render(ctx);
     this.renderHUD(ctx);
     if(DEBUG) this.renderDebug(ctx);
   }
 
   renderHUD(ctx){
-    const p = this.player, mt = p.metrics, g = growthOf(p.level);
+    const p = this.player, g = growthOf(p.level);
     drawText(ctx, 'FIRE LV ' + p.level, 24, 22, 5,
       { color:(r)=>PAL.fire[r], outline:PAL.outline, shadow:'#000', shadowOff:6 });
     drawText(ctx, g.form === 'A' ? 'HATCHLING' : 'FULL GROWN', 24, 66, 2, { color:'#dff0ff', shadow:'#0a1830' });
@@ -1528,7 +2123,27 @@ class GameScene extends Scene {
     }
     drawText(ctx, 'SCORE ' + String(this.score).padStart(7,'0'), 1264, 22, 4,
       { align:'right', color:PAL.gold, outline:PAL.outline, shadow:'#000', shadowOff:5 });
-    drawText(ctx, 'KILL ' + this.kills, 1264, 60, 2, { align:'right', color:'#dff0ff', shadow:'#0a1830' });
+    drawText(ctx, 'KILL ' + this.kills + '   T ' + this.director.t.toFixed(1), 1264, 60, 2,
+      { align:'right', color:'#dff0ff', shadow:'#0a1830' });
+
+    // 보스 HP 바
+    const b = this.boss;
+    if(b && !b.dead){
+      const w = 720, x = 640 - w/2, y = 120;
+      ctx.fillStyle = '#0a0a14'; ctx.fillRect(x - PX, y - PX, w + PX*2, 20 + PX*2);
+      ctx.fillStyle = '#2a2030'; ctx.fillRect(x, y, w, 20);
+      const k = clamp(b.hp / b.maxHp, 0, 1);
+      ctx.fillStyle = b.enraged ? PAL.fire[5] : PAL.fire[3];
+      ctx.fillRect(x, y, snap(w*k), 20);
+      ctx.fillStyle = b.enraged ? PAL.fire[1] : PAL.fire[1];
+      ctx.fillRect(x, y, snap(w*k), 6);
+      drawText(ctx, b.name, 640, y - 26, 3, { align:'center', color:PAL.white, outline:PAL.outline, shadow:'#000' });
+    }
+    // 보스 등장 배너
+    if(this.bossBannerT > 0 && Math.floor(this.bossBannerT*6) % 2 === 0){
+      drawText(ctx, 'WARNING', 640, 300, 10,
+        { align:'center', color:(r)=>PAL.fire[r], outline:PAL.outline, shadow:'#000', shadowOff:10 });
+    }
     drawText(ctx, '[ ] : LEVEL     ESC: TITLE', 1264, 700, 2,
       { align:'right', color:'#cfe6ff', shadow:'#0a1830' });
   }
@@ -1539,21 +2154,25 @@ class GameScene extends Scene {
     ctx.lineWidth = 2;
     ctx.strokeStyle = '#00ff88'; ctx.strokeRect(hb.x, hb.y, hb.w, hb.h);
     ctx.strokeStyle = 'rgba(255,80,120,.5)'; ctx.strokeRect(snap(p.x - m.w/2), snap(p.y - m.h/2), m.w, m.h);
-    ctx.strokeStyle = 'rgba(120,180,255,.4)'; ctx.strokeRect(p.x - m.bL, p.y - m.bT, m.bL + m.bR, m.bT + m.bB);
     ctx.strokeStyle = '#ff4d5a';
     for(const e of this.enemies){ const b = e.box; ctx.strokeRect(b.x, b.y, b.w, b.h); }
     ctx.strokeStyle = '#ffd24a';
     for(const b of this.bolts){ const bb = b.box; ctx.strokeRect(bb.x, bb.y, bb.w, bb.h); }
     ctx.strokeStyle = '#ff9a5a';
-    for(const a of this.arrows){ const ab = a.box; ctx.strokeRect(ab.x, ab.y, ab.w, ab.h); }
-    const mz = this.muzzle();
-    ctx.fillStyle = '#00ffff'; ctx.fillRect(mz.x - 3, mz.y - 3, 6, 6);
+    for(const list of [this.arrows, this.eshots, this.missiles, this.bombs])
+      for(const o of list){ const ob = o.box; ctx.strokeRect(ob.x, ob.y, ob.w, ob.h); }
     ctx.restore();
 
-    drawText(ctx, 'BOLT ' + this.bolts.length + '  ENEMY ' + this.enemies.length
-               + '  ARROW ' + this.arrows.length + '  PART ' + Particles.list.length, 16, 640, 2, { color:'#00ff88' });
-    drawText(ctx, 'SPD ' + Math.round(Math.hypot(p.vx,p.vy)) + ' / ' + PLAYER.SPEED
-               + '   DMG ' + FIRE[p.level].dmg + '  PIERCE ' + FIRE[p.level].pierce, 16, 658, 2, { color:'#00ff88' });
+    const bs = this.boss;
+    drawText(ctx, 'ENEMY ' + this.enemies.length + '  BOLT ' + this.bolts.length
+      + '  ESHOT ' + this.eshots.length + '  MSL ' + this.missiles.length
+      + '  BOMB ' + this.bombs.length + '  PART ' + Particles.list.length, 16, 622, 2, { color:'#00ff88' });
+    drawText(ctx, 'WAVE IDX ' + this.director.idx + '/' + TIMELINE.length
+      + '   MID ' + (this.director.midSpawned ? 'Y' : 'N')
+      + '   BOSS ' + (this.director.bossSpawned ? 'Y' : 'N')
+      + (bs ? ('   PHASE ' + bs.phase + ' HP ' + Math.max(0, Math.round(bs.hp))) : ''), 16, 640, 2, { color:'#00ff88' });
+    drawText(ctx, 'DMG ' + FIRE[p.level].dmg + '  PIERCE ' + FIRE[p.level].pierce
+      + '   SPD ' + Math.round(Math.hypot(p.vx,p.vy)), 16, 658, 2, { color:'#00ff88' });
     drawHUDDebug(ctx);
   }
 }
