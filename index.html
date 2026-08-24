@@ -221,6 +221,9 @@ const Input = {
     KeyQ:'missile', KeyE:'bomb', F3:'debug'
   },
   _pad:{ confirm:false, back:false },
+  padAxis:{ x:0, y:0 },        // 게임패드 왼쪽 스틱
+  taps: 0,                     // 이번 프레임 탭 횟수 (타이틀용)
+  pointerHandler: null,        // 씬이 등록하는 포인터 핸들러 {down,move,up}
 
   init(canvas){
     addEventListener('keydown', e => {
@@ -235,11 +238,29 @@ const Input = {
       if(a) this.down.delete(a);
     });
     addEventListener('blur', () => { this.down.clear(); this.just.clear(); });
-    // 터치 / 클릭 => confirm
-    const tap = e => { e.preventDefault(); this.just.add('confirm'); };
-    canvas.addEventListener('pointerdown', tap);
+
+    /* --- 포인터(터치/마우스): 캔버스 CSS 좌표 -> 게임 좌표로 변환 --- */
+    const toGame = e => {
+      const r = canvas.getBoundingClientRect();
+      return { x: (e.clientX - r.left) / r.width * GAME_W, y: (e.clientY - r.top) / r.height * GAME_H };
+    };
+    canvas.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      canvas.setPointerCapture && canvas.setPointerCapture(e.pointerId);
+      const p = toGame(e);
+      this.taps++;
+      if(this.pointerHandler && this.pointerHandler.down) this.pointerHandler.down(e.pointerId, p.x, p.y);
+    });
+    canvas.addEventListener('pointermove', e => {
+      if(!this.pointerHandler || !this.pointerHandler.move) return;
+      const p = toGame(e);
+      this.pointerHandler.move(e.pointerId, p.x, p.y);
+    });
+    const up = e => { if(this.pointerHandler && this.pointerHandler.up) this.pointerHandler.up(e.pointerId); };
+    canvas.addEventListener('pointerup', up);
+    canvas.addEventListener('pointercancel', up);
   },
-  /* 게임패드는 프레임당 1회 폴링 (A / Start = confirm, B / Select = back) */
+  /* 게임패드는 프레임당 1회 폴링 (A / Start = confirm, B / Select = back, 왼쪽 스틱 = 이동) */
   pollPad(){
     const pads = navigator.getGamepads ? navigator.getGamepads() : null;
     if(!pads) return;
@@ -250,13 +271,35 @@ const Input = {
       if(conf && !this._pad.confirm) this.just.add('confirm');
       if(back && !this._pad.back)    this.just.add('back');
       this._pad.confirm = conf; this._pad.back = back;
+
+      // 아날로그 스틱: 데드존 처리 후 0~1 로 재정규화
+      const ax = p.axes[0] || 0, ay = p.axes[1] || 0;
+      const d = Math.hypot(ax, ay), DZ = 0.18;
+      if(d > DZ){
+        const n = Math.min(1, (d - DZ) / (1 - DZ));
+        this.padAxis.x = ax/d * n; this.padAxis.y = ay/d * n;
+      }else{
+        this.padAxis.x = this.padAxis.y = 0;
+      }
       return;
     }
     this._pad.confirm = this._pad.back = false;
+    this.padAxis.x = this.padAxis.y = 0;
+  },
+  /* 키보드 + 게임패드 이동 벡터 (대각선 정규화) */
+  moveVector(){
+    let x = 0, y = 0;
+    if(this.held('left'))  x -= 1;
+    if(this.held('right')) x += 1;
+    if(this.held('up'))    y -= 1;
+    if(this.held('down'))  y += 1;
+    if(x || y){ const d = Math.hypot(x,y); return { x:x/d, y:y/d }; }
+    if(this.padAxis.x || this.padAxis.y) return { x:this.padAxis.x, y:this.padAxis.y };
+    return { x:0, y:0 };
   },
   held(a){ return this.down.has(a); },
   pressed(a){ return this.just.has(a); },
-  endFrame(){ this.just.clear(); }
+  endFrame(){ this.just.clear(); this.taps = 0; }
 };
 
 /* ==================================================================
@@ -308,13 +351,14 @@ function makeCanvas(w,h){
 }
 
 /* 하늘: 4px 밴드 그라데이션 (도트 느낌 유지) */
-function buildSky(){
+const SKY_TITLE = [
+  {p:0.00,c:'#100820'},{p:0.26,c:'#1d0d3c'},{p:0.48,c:'#331452'},
+  {p:0.64,c:'#5c1f5c'},{p:0.75,c:'#98324f'},{p:0.83,c:'#d1573a'},
+  {p:0.90,c:'#f79a45'},{p:1.00,c:'#ffd07a'}
+];
+function buildSky(stops){
   const { cv, c } = makeCanvas(GAME_W, GAME_H);
-  const stops = [
-    {p:0.00,c:'#100820'},{p:0.26,c:'#1d0d3c'},{p:0.48,c:'#331452'},
-    {p:0.64,c:'#5c1f5c'},{p:0.75,c:'#98324f'},{p:0.83,c:'#d1573a'},
-    {p:0.90,c:'#f79a45'},{p:1.00,c:'#ffd07a'}
-  ];
+  stops = stops || SKY_TITLE;
   for(let y=0; y<GAME_H; y+=PX){
     c.fillStyle = rampColor(stops, y/(GAME_H-PX));
     c.fillRect(0, y, GAME_W, PX);
@@ -371,6 +415,255 @@ function fillPixelCircle(ctx, cx, cy, r, color){
     const w = snap(dx*2);
     if(w <= 0) continue;
     ctx.fillRect(snap(cx - dx), snap(cy + y), w, PX);
+  }
+}
+
+/* ==================================================================
+   스프라이트 시스템
+   - 좌측 절반만 문자 그리드로 작성하고 미러링해서 그림 (완벽 대칭 보장)
+   - 같은 색이 연속되는 구간은 fillRect 1회로 묶어서 그림 (호출 수 최소화)
+   ================================================================== */
+const SPR_CELL = 4;                          // 도트 1칸 = 4px
+const SPR_HALF = 14;                         // 반폭 셀 수
+const SPR_ROWS = 22;
+const SPR_W = SPR_HALF * 2 * SPR_CELL;       // 112px
+const SPR_H = SPR_ROWS * SPR_CELL;           // 88px
+
+/* 1번 드래곤 : 노바트 (검정 + 붉은 눈) */
+const NOVART_PAL = {
+  K:'#0d0912',  // 외곽선
+  D:'#241d33',  // 몸통 어두운 면
+  M:'#3a3050',  // 몸통 중간 면
+  L:'#544772',  // 몸통 밝은 면
+  S:'#7a68a5',  // 등줄기 하이라이트
+  E:'#ff2b3c',  // 눈 (붉은색)
+  H:'#ffd9dc',  // 눈 하이라이트
+  w:'#2e2743',  // 날개 막
+  f:'#4a3d68',  // 날개 뼈대
+  T:'#3d3358'   // 꼬리 지느러미
+};
+/* 몸통 (col 13 = 중심선) */
+const NOVART_BODY = [
+  '..............',  // 0
+  '..........KKKK',  // 1  머리 앞끝
+  '.........KDDDD',  // 2
+  '........KDDDDM',  // 3
+  '........KDHEDM',  // 4  눈 + 하이라이트
+  '........KDEEDM',  // 5  눈
+  '........KDDDDM',  // 6  볼
+  '.......KKDDDDM',  // 7  귀지느러미
+  '.......KKDDDMM',  // 8  목
+  '.......KDMMMMS',  // 9  어깨
+  '......KDMMLLLS',  // 10
+  '......KDMMLLLS',  // 11 몸통 최대폭
+  '.......KDMMLLS',  // 12
+  '........KDMMLS',  // 13
+  '.........KDMLS',  // 14
+  '..........KDMS',  // 15 꼬리
+  '..........KDMS',  // 16
+  '..........KDMS',  // 17
+  '..........KDMS',  // 18
+  '.........KTDMS',  // 19 꼬리 지느러미
+  '........KTTDMS',  // 20
+  '........KTTTDS'   // 21
+];
+/* 날개 4포즈 : 0=위로 최대 -> 2=수평(최대 전개) -> 3=아래로 최대 */
+const NOVART_WINGS = [
+  [ // W0 위로 크게 든 상태 (원근상 좁아짐)
+    '..............','..............','..............','..............',
+    '..............','..............','..............','.....KKKKK....',
+    '....KfffwwK...','...Kfwwwwwk...','...Kwwwwwwk...','...Kwwwwwwk...',
+    '....Kwwwwwk...','.....KKwwwk...','.......KKKk...','..............',
+    '..............','..............','..............','..............',
+    '..............','..............'
+  ],
+  [ // W1 중간 위
+    '..............','..............','..............','..............',
+    '..............','..............','..............','...KKKKKK.....',
+    '..Kffffwwk....','.Kfwwwwwwwk...','.Kwwwwwwwwk...','.Kwwwwwwwwk...',
+    '..Kwwwwwwwk...','...KKwwwwwk...','.....KKKKKk...','..............',
+    '..............','..............','..............','..............',
+    '..............','..............'
+  ],
+  [ // W2 수평 (최대 전개)
+    '..............','..............','..............','..............',
+    '..............','..............','..............','...KKKKKKK....',
+    '.KKfffffwwk...','Kfwwwwwwwwk...','Kwwwwwwwwwk...','Kwwwwwwwwwk...',
+    '.Kwwwwwwwwk...','..KKwwwwwwk...','....KKKKKKk...','..............',
+    '..............','..............','..............','..............',
+    '..............','..............'
+  ],
+  [ // W3 아래로 내려친 상태
+    '..............','..............','..............','..............',
+    '..............','..............','..............','....KKKKKK....',
+    '...Kffffwwk...','..Kfwwwwwwk...','..Kwwwwwwwk...','..Kwwwwwwwk...',
+    '...Kwwwwwwk...','...Kwwwwwwk...','....KKwwwwk...','......KKKKk...',
+    '..............','..............','..............','..............',
+    '..............','..............'
+  ]
+];
+
+/* 반쪽 그리드 1장을 그림. flip=true 면 중심선 기준 좌우 반전 */
+function drawHalfGrid(ctx, grid, ox, oy, pal, flip, tint){
+  const full = SPR_HALF * 2;
+  for(let r=0; r<grid.length; r++){
+    const row = grid[r], gy = oy + r*SPR_CELL;
+    let c = 0;
+    while(c < row.length){
+      const ch = row[c];
+      if(ch === '.'){ c++; continue; }
+      let e = c + 1;
+      while(e < row.length && row[e] === ch) e++;      // 동일 색 런 길이
+      ctx.fillStyle = tint || pal[ch] || '#ff00ff';
+      const gx = flip ? ox + (full - e)*SPR_CELL : ox + c*SPR_CELL;
+      ctx.fillRect(gx, gy, (e - c)*SPR_CELL, SPR_CELL);
+      c = e;
+    }
+  }
+}
+
+/* 드래곤 1마리 그리기. cx,cy = 스프라이트 중심 / bank = 좌우 기울기(셀 단위) */
+function drawDragon(ctx, pal, body, wings, cx, cy, pose, bank, tint){
+  const ox = snap(cx - SPR_W/2), oy = snap(cy - SPR_H/2);
+  const w = wings[pose], bo = bank * SPR_CELL;
+  drawHalfGrid(ctx, w, ox, oy + bo, pal, false, tint);   // 왼쪽 날개 (몸통 뒤)
+  drawHalfGrid(ctx, w, ox, oy - bo, pal, true,  tint);   // 오른쪽 날개
+  drawHalfGrid(ctx, body, ox, oy, pal, false, tint);     // 몸통
+  drawHalfGrid(ctx, body, ox, oy, pal, true,  tint);
+}
+
+/* ==================================================================
+   플레이어
+   ================================================================== */
+const PLAYER = {
+  SPEED: 400,        // 초당 400px
+  ACCEL: 4000,       // 400 / 0.1s => 0.1초만에 최고속 도달 (감속도 동일)
+  MARGIN: 20,        // 화면 가장자리 여백
+  BOUND_HW: 28,      // 이동 제한용 반폭 (날개끝이 아닌 몸통 기준)
+  BOUND_HH: 44,
+  HIT_W: 16, HIT_H: 16,           // 피격 판정 (몸통 중앙, 슈팅게임 관례상 작게)
+  FLY_FPS: 0.055,    // 이동 중 날갯짓 간격
+  IDLE_FPS: 0.30     // 정지 중 날갯짓 간격
+};
+/* 날갯짓 핑퐁 순서 */
+const FLY_SEQ  = [0,1,2,3,2,1];
+const IDLE_SEQ = [2,1];
+
+class Player {
+  constructor(x, y){
+    this.x = x; this.y = y;
+    this.vx = 0; this.vy = 0;
+    this.animT = 0; this.animI = 0;
+    this.t = 0;
+    this.moving = false;
+  }
+  get hitbox(){
+    return { x: this.x - PLAYER.HIT_W/2, y: this.y - PLAYER.HIT_H/2 + 6, w: PLAYER.HIT_W, h: PLAYER.HIT_H };
+  }
+  update(dt, mv){
+    this.t += dt;
+    // --- 가감속: 목표 속도로 일정 가속도만큼 접근 (0.1초 도달) ---
+    const tvx = mv.x * PLAYER.SPEED, tvy = mv.y * PLAYER.SPEED;
+    const d = PLAYER.ACCEL * dt;
+    this.vx += clamp(tvx - this.vx, -d, d);
+    this.vy += clamp(tvy - this.vy, -d, d);
+    this.x += this.vx * dt;
+    this.y += this.vy * dt;
+
+    // --- 화면 경계 (벽에 닿으면 해당 축 속도 0: 관성 누적 방지) ---
+    const minX = PLAYER.MARGIN + PLAYER.BOUND_HW, maxX = GAME_W - minX;
+    const minY = PLAYER.MARGIN + PLAYER.BOUND_HH, maxY = GAME_H - minY;
+    if(this.x < minX){ this.x = minX; this.vx = 0; }
+    if(this.x > maxX){ this.x = maxX; this.vx = 0; }
+    if(this.y < minY){ this.y = minY; this.vy = 0; }
+    if(this.y > maxY){ this.y = maxY; this.vy = 0; }
+
+    // --- 애니메이션 ---
+    const speed = Math.hypot(this.vx, this.vy);
+    const nowMoving = speed > 40;
+    if(nowMoving !== this.moving){ this.moving = nowMoving; this.animT = 0; this.animI = 0; }
+    const rate = this.moving ? PLAYER.FLY_FPS : PLAYER.IDLE_FPS;
+    this.animT += dt;
+    while(this.animT >= rate){ this.animT -= rate; this.animI++; }
+  }
+  render(ctx){
+    const seq  = this.moving ? FLY_SEQ : IDLE_SEQ;
+    const pose = seq[this.animI % seq.length];
+    // 좌우 이동 시 기울기 (왼날개 내려가고 오른날개 올라감)
+    const bank = clamp(Math.round(this.vx / PLAYER.SPEED * 2.4), -2, 2);
+    // 정지 시 몸체가 위아래로 살짝 (도트 단위로 스냅)
+    const bob = this.moving ? 0 : snap(Math.sin(this.t * 3.2) * 3);
+    drawDragon(ctx, NOVART_PAL, NOVART_BODY, NOVART_WINGS, this.x, this.y + bob, pose, bank, null);
+  }
+}
+
+/* ==================================================================
+   가상 아날로그 스틱 (좌하단)
+   ================================================================== */
+const STICK_CFG = { x:158, y:GAME_H-158, radius:78, knob:30, alpha:0.42, dead:0.16 };
+
+class VirtualStick {
+  constructor(cfg){
+    this.cfg = cfg;
+    this.active = false; this.pid = null;
+    this.dx = 0; this.dy = 0;
+  }
+  down(id, x, y){
+    if(this.active) return false;
+    // 스틱 주변 넓은 영역을 터치하면 잡히도록 (모바일 조작 편의)
+    if(Math.hypot(x - this.cfg.x, y - this.cfg.y) > this.cfg.radius * 2.0) return false;
+    this.active = true; this.pid = id;
+    this.move(id, x, y);
+    return true;
+  }
+  move(id, x, y){
+    if(!this.active || this.pid !== id) return;
+    let dx = x - this.cfg.x, dy = y - this.cfg.y;
+    const d = Math.hypot(dx, dy);
+    if(d > this.cfg.radius){ dx = dx/d * this.cfg.radius; dy = dy/d * this.cfg.radius; }
+    this.dx = dx; this.dy = dy;
+  }
+  up(id){
+    if(this.pid !== id) return;
+    this.active = false; this.pid = null; this.dx = this.dy = 0;
+  }
+  vector(){
+    const d = Math.hypot(this.dx, this.dy);
+    if(d < this.cfg.radius * this.cfg.dead) return { x:0, y:0 };
+    const n = Math.min(1, d / this.cfg.radius);
+    return { x: this.dx/d * n, y: this.dy/d * n };
+  }
+  render(ctx){
+    const { x, y, radius, knob, alpha } = this.cfg;
+    ctx.globalAlpha = this.active ? alpha + 0.22 : alpha;
+    drawPixelRing(ctx, x, y, radius, PX*2, '#e6dcff');
+    drawPixelRing(ctx, x, y, radius - PX*3, PX, '#7a6aa8');
+    // 방향 눈금
+    ctx.fillStyle = '#e6dcff';
+    for(const [ax,ay] of [[0,-1],[0,1],[-1,0],[1,0]]){
+      ctx.fillRect(snap(x + ax*(radius-PX*8) - PX), snap(y + ay*(radius-PX*8) - PX), PX*2, PX*2);
+    }
+    const kx = x + this.dx, ky = y + this.dy;
+    fillPixelCircle(ctx, kx, ky, knob, this.active ? '#ffd24a' : '#c9bcf0');
+    drawPixelRing(ctx, kx, ky, knob, PX, '#3a2f52');
+    ctx.globalAlpha = 1;
+  }
+}
+
+/* 픽셀 링(원 테두리) */
+function drawPixelRing(ctx, cx, cy, r, thick, color){
+  ctx.fillStyle = color;
+  const ri = r - thick;
+  for(let y = -r; y <= r; y += PX){
+    const xo = Math.sqrt(Math.max(0, r*r - y*y));
+    const yy = snap(cy + y);
+    if(Math.abs(y) >= ri){
+      ctx.fillRect(snap(cx - xo), yy, snap(xo*2), PX);        // 위/아래 뚜껑 부분
+    }else{
+      const xi = Math.sqrt(Math.max(0, ri*ri - y*y));
+      ctx.fillRect(snap(cx - xo), yy, snap(xo - xi), PX);     // 좌측 벽
+      ctx.fillRect(snap(cx + xi), yy, snap(xo - xi), PX);     // 우측 벽
+    }
   }
 }
 
@@ -451,7 +744,7 @@ class TitleScene extends Scene {
       if(s.y > 460 || s.x > GAME_W + 40){ this.shoot = null; this.shootT = 4 + Math.random()*6; }
     }
 
-    if(!this.mgr.busy && Input.pressed('confirm')) this.mgr.change(new StubScene());
+    if(!this.mgr.busy && (Input.pressed('confirm') || Input.taps > 0)) this.mgr.change(new GameScene());
   }
 
   render(ctx){
@@ -571,29 +864,104 @@ class TitleScene extends Scene {
 }
 
 /* ==================================================================
-   StubScene - Phase 2 자리 (씬 전환 동작 확인용 임시 씬)
+   GameScene - Phase 2 : 이동 테스트
+   (배경은 Phase 7 에서 20종 스테이지로 교체될 임시 플레이스홀더)
    ================================================================== */
-class StubScene extends Scene {
-  enter(){ this.t = 0; }
+const SKY_TEST = [
+  {p:0.00,c:'#0e1b3d'},{p:0.30,c:'#1b3268'},{p:0.55,c:'#2f5a92'},
+  {p:0.75,c:'#4f8cb0'},{p:0.90,c:'#7dbcc4'},{p:1.00,c:'#a8dcc8'}
+];
+
+class GameScene extends Scene {
+  enter(){
+    this.t = 0;
+    this.sky = buildSky(SKY_TEST);
+    this.player = new Player(GAME_W/2, GAME_H - 200);
+    this.stick = new VirtualStick(STICK_CFG);
+    Input.pointerHandler = {
+      down:(id,x,y) => { this.stick.down(id,x,y); },
+      move:(id,x,y) => { this.stick.move(id,x,y); },
+      up:  (id)     => { this.stick.up(id); }
+    };
+    // 스크롤 배경 요소 (아래로 흐름)
+    const rnd = mulberry32(909);
+    this.clouds = [];
+    for(let i=0;i<14;i++){
+      this.clouds.push({
+        x: rnd()*GAME_W, y: rnd()*GAME_H,
+        w: snap(70 + rnd()*190), h: snap(10 + rnd()*14),
+        sp: 26 + rnd()*46, a: 0.10 + rnd()*0.16
+      });
+    }
+    this.lines = [];
+    for(let i=0;i<40;i++) this.lines.push({ x: snap(rnd()*GAME_W), y: rnd()*GAME_H, len: snap(10+rnd()*26), sp: 260+rnd()*280 });
+  }
+  exit(){ Input.pointerHandler = null; }
+
   update(dt){
     this.t += dt;
-    if(!this.mgr.busy && (Input.pressed('pause') || Input.pressed('back') || Input.pressed('confirm')))
-      this.mgr.change(new TitleScene());
+    // 가상 스틱이 잡혀 있으면 우선, 아니면 키보드/게임패드
+    const sv = this.stick.vector();
+    const mv = (sv.x || sv.y) ? sv : Input.moveVector();
+    this.player.update(dt, mv);
+
+    for(const c of this.clouds){
+      c.y += c.sp*dt;
+      if(c.y > GAME_H + 20){ c.y = -30; c.x = Math.random()*GAME_W; }
+    }
+    for(const l of this.lines){
+      l.y += l.sp*dt;
+      if(l.y > GAME_H + 40){ l.y = -40; l.x = snap(Math.random()*GAME_W); }
+    }
+    if(!this.mgr.busy && (Input.pressed('pause') || Input.pressed('back'))) this.mgr.change(new TitleScene());
   }
+
   render(ctx){
-    ctx.fillStyle = '#0d0620'; ctx.fillRect(0,0,GAME_W,GAME_H);
-    // 체크 패턴 배경
-    ctx.fillStyle = '#130a2a';
-    for(let y=0;y<GAME_H;y+=64) for(let x=((y/64)%2)*64; x<GAME_W; x+=128) ctx.fillRect(x,y,64,64);
+    ctx.drawImage(this.sky, 0, 0);
+    // 구름 (아래로 스크롤)
+    for(const c of this.clouds){
+      ctx.globalAlpha = c.a;
+      ctx.fillStyle = '#ffffff';
+      const y = snap(c.y);
+      ctx.fillRect(snap(c.x), y, c.w, c.h);
+      ctx.fillRect(snap(c.x + c.w*0.2), y - PX*2, snap(c.w*0.5), PX*2);
+      ctx.fillRect(snap(c.x - PX*2), y + c.h, snap(c.w*0.7), PX*2);
+    }
+    ctx.globalAlpha = 1;
+    // 속도선 (전진감)
+    ctx.fillStyle = '#dff3ff';
+    for(const l of this.lines){
+      ctx.globalAlpha = 0.16;
+      ctx.fillRect(l.x, snap(l.y), PX, l.len);
+    }
+    ctx.globalAlpha = 1;
 
-    drawText(ctx, 'CHARACTER SELECT', 640, 250, 8,
-      { align:'center', color:(r)=>PAL.fire[r], outline:PAL.outline, shadow:'#000', shadowOff:10 });
-    drawText(ctx, 'COMING IN PHASE 2', 640, 350, 4, { align:'center', color:PAL.dim });
+    this.player.render(ctx);
+    this.stick.render(ctx);
 
-    const on = (this.t*1.55 % 1) < 0.62;
-    if(on) drawText(ctx, 'ESC TO GO BACK', 640, 470, 4, { align:'center', color:PAL.gold, shadow:'#000' });
+    // 임시 안내
+    drawText(ctx, 'PHASE 2 - MOVEMENT TEST', 640, 24, 3, { align:'center', color:PAL.white, shadow:'#0a1830' });
+    drawText(ctx, 'ESC: TITLE', 1264, 24, 2, { align:'right', color:'#cfe6ff', shadow:'#0a1830' });
 
-    if(DEBUG) drawHUDDebug(ctx);
+    if(DEBUG){
+      const p = this.player, hb = p.hitbox;
+      // 히트박스 시각화
+      ctx.strokeStyle = '#00ff88'; ctx.lineWidth = 2;
+      ctx.strokeRect(hb.x, hb.y, hb.w, hb.h);
+      // 스프라이트 경계
+      ctx.strokeStyle = 'rgba(255,80,120,.55)';
+      ctx.strokeRect(snap(p.x - SPR_W/2), snap(p.y - SPR_H/2), SPR_W, SPR_H);
+      // 속도 벡터
+      ctx.strokeStyle = '#ffd24a';
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + p.vx*0.12, p.y + p.vy*0.12); ctx.stroke();
+
+      const spd = Math.hypot(p.vx, p.vy);
+      drawText(ctx, 'POS ' + Math.round(p.x) + ',' + Math.round(p.y), 16, 40, 2, { color:'#00ff88' });
+      drawText(ctx, 'SPD ' + Math.round(spd), 16, 58, 2, { color:'#00ff88' });
+      drawText(ctx, 'POSE ' + (p.moving ? FLY_SEQ[p.animI % FLY_SEQ.length] : IDLE_SEQ[p.animI % IDLE_SEQ.length])
+                 + (p.moving ? ' FLY' : ' IDLE'), 16, 76, 2, { color:'#00ff88' });
+      drawHUDDebug(ctx);
+    }
   }
 }
 
