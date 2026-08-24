@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>DRAGON STRIKER</title>
+<style>
+  *{ margin:0; padding:0; box-sizing:border-box; }
+  html,body{
+    width:100%; height:100%; background:#000; overflow:hidden;
+    font-family:"Courier New",monospace;
+    -webkit-tap-highlight-color:transparent;
+    touch-action:none; user-select:none; -webkit-user-select:none;
+  }
+  #stage{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:#000; }
+  #game{
+    display:block; background:#000;
+    image-rendering:pixelated; image-rendering:crisp-edges;
+    box-shadow:0 0 60px rgba(255,90,20,.18);
+  }
+  /* 세로 모드 안내 오버레이 */
+  #rotate{
+    position:fixed; inset:0; z-index:10; background:#0a0616; color:#ffd24a;
+    display:none; flex-direction:column; align-items:center; justify-content:center;
+    gap:22px; text-align:center; padding:20px;
+  }
+  #rotate.show{ display:flex; }
+  .rot-icon{ width:74px; height:120px; border:6px solid #ffd24a; border-radius:12px; animation:rot 1.8s ease-in-out infinite; }
+  @keyframes rot{ 0%,40%{ transform:rotate(0deg) } 60%,100%{ transform:rotate(-90deg) } }
+  #rotate .ko{ font-size:19px; letter-spacing:3px; }
+  #rotate .en{ font-size:12px; letter-spacing:2px; color:#8a7bb8; }
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="game" width="1280" height="720"></canvas></div>
+<div id="rotate">
+  <div class="rot-icon"></div>
+  <p class="ko">가로 모드로 전환해주세요</p>
+  <p class="en">PLEASE ROTATE YOUR DEVICE</p>
+</div>
+<script>
+'use strict';
+/* ==================================================================
+   DRAGON STRIKER  /  Phase 1 : 기본 뼈대
+   - Canvas 1280x720 고정 + 레터박스 반응형
+   - 고정 타임스텝(60FPS) 루프 + deltaTime
+   - Scene Manager (페이드 전환)
+   - TitleScene (도트 로고 + PRESS ENTER 깜빡임)
+   ================================================================== */
+
+const GAME_W = 1280, GAME_H = 720;
+const PX = 4;                       // 도트 1칸 = 4px. 모든 배경 요소는 이 그리드에 스냅
+const COLS = GAME_W / PX;           // 320칸
+const snap  = v => Math.round(v / PX) * PX;
+const clamp = (v,a,b) => v < a ? a : (v > b ? b : v);
+const lerp  = (a,b,t) => a + (b-a)*t;
+
+/* ---------------- 공용 팔레트 ---------------- */
+const PAL = {
+  fire: ['#fff6c2','#ffd24a','#ffa32e','#ff7a1e','#f0451f','#c81f2e','#8f1230'],
+  gold:'#ffd24a', goldDim:'#a3701a', white:'#fdf6e3', dim:'#8a7bb8',
+  cyan:'#67e8f9', violet:'#a78bfa', ink:'#160a1e', outline:'#2a0a14'
+};
+
+/* ---------------- 색상 유틸 ---------------- */
+function hex2rgb(h){ const n = parseInt(h.slice(1),16); return [(n>>16)&255,(n>>8)&255,n&255]; }
+function rgb2hex(r,g,b){ return '#'+((1<<24)|(r<<16)|(g<<8)|b).toString(16).slice(1); }
+function mixHex(a,b,t){
+  const A = hex2rgb(a), B = hex2rgb(b);
+  return rgb2hex(Math.round(lerp(A[0],B[0],t)), Math.round(lerp(A[1],B[1],t)), Math.round(lerp(A[2],B[2],t)));
+}
+function rampColor(stops, t){
+  t = clamp(t,0,1);
+  for(let i=0;i<stops.length-1;i++){
+    const a = stops[i], b = stops[i+1];
+    if(t >= a.p && t <= b.p){
+      const k = (b.p - a.p) < 1e-6 ? 0 : (t - a.p)/(b.p - a.p);
+      return mixHex(a.c, b.c, k);
+    }
+  }
+  return stops[stops.length-1].c;
+}
+
+/* ---------------- 난수 (시드 고정 / 타일링 안전) ---------------- */
+function mulberry32(seed){
+  let a = seed >>> 0;
+  return function(){
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function hash1(i, seed){
+  let h = Math.imul(i ^ seed, 2654435761);
+  h ^= h >>> 15; h = Math.imul(h, 2246822519); h ^= h >>> 13;
+  return (h >>> 0) / 4294967296;
+}
+
+/* ==================================================================
+   픽셀 폰트 (5x7) - fillRect 로 직접 찍는 도트 폰트
+   ================================================================== */
+const FONT = {
+  A:['01110','10001','10001','11111','10001','10001','10001'],
+  B:['11110','10001','10001','11110','10001','10001','11110'],
+  C:['01110','10001','10000','10000','10000','10001','01110'],
+  D:['11110','10001','10001','10001','10001','10001','11110'],
+  E:['11111','10000','10000','11110','10000','10000','11111'],
+  F:['11111','10000','10000','11110','10000','10000','10000'],
+  G:['01110','10001','10000','10111','10001','10001','01111'],
+  H:['10001','10001','10001','11111','10001','10001','10001'],
+  I:['11111','00100','00100','00100','00100','00100','11111'],
+  J:['00111','00010','00010','00010','00010','10010','01100'],
+  K:['10001','10010','10100','11000','10100','10010','10001'],
+  L:['10000','10000','10000','10000','10000','10000','11111'],
+  M:['10001','11011','10101','10101','10001','10001','10001'],
+  N:['10001','11001','11001','10101','10011','10011','10001'],
+  O:['01110','10001','10001','10001','10001','10001','01110'],
+  P:['11110','10001','10001','11110','10000','10000','10000'],
+  Q:['01110','10001','10001','10001','10101','10010','01101'],
+  R:['11110','10001','10001','11110','10100','10010','10001'],
+  S:['01111','10000','10000','01110','00001','00001','11110'],
+  T:['11111','00100','00100','00100','00100','00100','00100'],
+  U:['10001','10001','10001','10001','10001','10001','01110'],
+  V:['10001','10001','10001','10001','10001','01010','00100'],
+  W:['10001','10001','10001','10101','10101','11011','10001'],
+  X:['10001','10001','01010','00100','01010','10001','10001'],
+  Y:['10001','10001','01010','00100','00100','00100','00100'],
+  Z:['11111','00001','00010','00100','01000','10000','11111'],
+  '0':['01110','10011','10011','10101','11001','11001','01110'],
+  '1':['00100','01100','00100','00100','00100','00100','01110'],
+  '2':['01110','10001','00001','00010','00100','01000','11111'],
+  '3':['11111','00010','00100','00010','00001','10001','01110'],
+  '4':['00010','00110','01010','10010','11111','00010','00010'],
+  '5':['11111','10000','11110','00001','00001','10001','01110'],
+  '6':['00110','01000','10000','11110','10001','10001','01110'],
+  '7':['11111','00001','00010','00100','01000','01000','01000'],
+  '8':['01110','10001','10001','01110','10001','10001','01110'],
+  '9':['01110','10001','10001','01111','00001','00010','01100'],
+  ' ':['00000','00000','00000','00000','00000','00000','00000'],
+  '.':['00000','00000','00000','00000','00000','01100','01100'],
+  ',':['00000','00000','00000','00000','01100','01100','01000'],
+  ':':['00000','01100','01100','00000','01100','01100','00000'],
+  '!':['00100','00100','00100','00100','00100','00000','00100'],
+  '?':['01110','10001','00001','00010','00100','00000','00100'],
+  '-':['00000','00000','00000','11111','00000','00000','00000'],
+  '_':['00000','00000','00000','00000','00000','00000','11111'],
+  '/':['00001','00010','00010','00100','01000','01000','10000'],
+  '+':['00000','00100','00100','11111','00100','00100','00000'],
+  '*':['00000','10101','01110','11111','01110','10101','00000'],
+  '(':['00010','00100','01000','01000','01000','00100','00010'],
+  ')':['01000','00100','00010','00010','00010','00100','01000'],
+  '<':['00010','00100','01000','10000','01000','00100','00010'],
+  '>':['01000','00100','00010','00001','00010','00100','01000'],
+  '%':['10001','00010','00010','00100','01000','01000','10001']
+};
+const FONT_W = 5, FONT_H = 7;
+
+function textWidth(text, s, spacing){
+  const sp = (spacing === undefined) ? s : spacing;
+  return text.length === 0 ? 0 : text.length * (FONT_W*s + sp) - sp;
+}
+
+/* 도트 텍스트 출력
+   opt : { align, color:'#hex'|fn(row,col,charIdx), outline, shadow, shadowOff, spacing, alpha } */
+function drawText(ctx, text, x, y, s, opt){
+  opt = opt || {};
+  text = String(text).toUpperCase();
+  const sp   = (opt.spacing === undefined) ? s : opt.spacing;
+  const w    = textWidth(text, s, sp);
+  const step = FONT_W*s + sp;
+  let sx = x;
+  if(opt.align === 'center') sx = x - w/2;
+  else if(opt.align === 'right') sx = x - w;
+  sx = Math.round(sx); y = Math.round(y);
+
+  const oldA = ctx.globalAlpha;
+  if(opt.alpha !== undefined) ctx.globalAlpha = opt.alpha;
+
+  const each = (cb) => {
+    for(let ci=0; ci<text.length; ci++){
+      const g  = FONT[text[ci]] || FONT[' '];
+      const gx = sx + ci*step;
+      for(let r=0; r<FONT_H; r++){
+        const row = g[r];
+        for(let c=0; c<FONT_W; c++) if(row[c] === '1') cb(gx + c*s, y + r*s, r, c, ci);
+      }
+    }
+  };
+
+  if(opt.shadow){
+    const off = (opt.shadowOff === undefined) ? s : opt.shadowOff;
+    ctx.fillStyle = opt.shadow;
+    each((px,py) => ctx.fillRect(px+off, py+off, s, s));
+  }
+  if(opt.outline){
+    ctx.fillStyle = opt.outline;
+    each((px,py) => ctx.fillRect(px-s, py-s, s*3, s*3));
+  }
+  if(typeof opt.color === 'function'){
+    each((px,py,r,c,ci) => { ctx.fillStyle = opt.color(r,c,ci); ctx.fillRect(px,py,s,s); });
+  }else{
+    ctx.fillStyle = opt.color || PAL.white;
+    each((px,py) => ctx.fillRect(px,py,s,s));
+  }
+  ctx.globalAlpha = oldA;
+  return w;
+}
+
+/* ==================================================================
+   입력 시스템 (키보드 / 터치 / 게임패드 최소 지원)
+   ================================================================== */
+const Input = {
+  down: new Set(),      // 눌린 상태
+  just: new Set(),      // 이번 프레임에 눌림
+  KEYMAP: {
+    ArrowUp:'up', KeyW:'up', ArrowDown:'down', KeyS:'down',
+    ArrowLeft:'left', KeyA:'left', ArrowRight:'right', KeyD:'right',
+    Enter:'confirm', NumpadEnter:'confirm', Space:'confirm', KeyZ:'confirm',
+    Escape:'pause', KeyP:'pause', Backspace:'back', KeyX:'back',
+    KeyQ:'missile', KeyE:'bomb', F3:'debug'
+  },
+  _pad:{ confirm:false, back:false },
+
+  init(canvas){
+    addEventListener('keydown', e => {
+      const a = this.KEYMAP[e.code];
+      if(!a) return;
+      if(e.code === 'Space' || e.code === 'Backspace' || e.code.startsWith('Arrow') || e.code === 'F3') e.preventDefault();
+      if(e.repeat) return;
+      this.down.add(a); this.just.add(a);
+    });
+    addEventListener('keyup', e => {
+      const a = this.KEYMAP[e.code];
+      if(a) this.down.delete(a);
+    });
+    addEventListener('blur', () => { this.down.clear(); this.just.clear(); });
+    // 터치 / 클릭 => confirm
+    const tap = e => { e.preventDefault(); this.just.add('confirm'); };
+    canvas.addEventListener('pointerdown', tap);
+  },
+  /* 게임패드는 프레임당 1회 폴링 (A / Start = confirm, B / Select = back) */
+  pollPad(){
+    const pads = navigator.getGamepads ? navigator.getGamepads() : null;
+    if(!pads) return;
+    for(let i=0;i<pads.length;i++){
+      const p = pads[i]; if(!p) continue;
+      const b = n => !!(p.buttons[n] && p.buttons[n].pressed);
+      const conf = b(0) || b(9), back = b(1) || b(8);
+      if(conf && !this._pad.confirm) this.just.add('confirm');
+      if(back && !this._pad.back)    this.just.add('back');
+      this._pad.confirm = conf; this._pad.back = back;
+      return;
+    }
+    this._pad.confirm = this._pad.back = false;
+  },
+  held(a){ return this.down.has(a); },
+  pressed(a){ return this.just.has(a); },
+  endFrame(){ this.just.clear(); }
+};
+
+/* ==================================================================
+   Scene Manager (페이드 인/아웃 전환)
+   ================================================================== */
+class Scene {
+  enter(){}  exit(){}  update(dt){}  render(ctx){}
+}
+class SceneManager {
+  constructor(){ this.current = null; this.next = null; this.state = 'idle'; this.t = 0; this.fade = 0; this.dur = 0.26; }
+  get busy(){ return this.state !== 'idle'; }
+  set(scene){
+    if(this.current) this.current.exit();
+    this.current = scene; this.current.mgr = this; this.current.enter();
+  }
+  change(scene){
+    if(this.busy) return;
+    this.next = scene; this.state = 'out'; this.t = 0;
+  }
+  update(dt){
+    if(this.state === 'out'){
+      this.t += dt; this.fade = clamp(this.t/this.dur, 0, 1);
+      if(this.t >= this.dur){ this.set(this.next); this.next = null; this.state = 'in'; this.t = 0; }
+    }else if(this.state === 'in'){
+      this.t += dt; this.fade = 1 - clamp(this.t/this.dur, 0, 1);
+      if(this.t >= this.dur){ this.fade = 0; this.state = 'idle'; }
+    }
+    if(this.current) this.current.update(dt);
+  }
+  render(ctx){
+    if(this.current) this.current.render(ctx);
+    if(this.fade > 0){
+      ctx.globalAlpha = this.fade;
+      ctx.fillStyle = '#000'; ctx.fillRect(0,0,GAME_W,GAME_H);
+      ctx.globalAlpha = 1;
+    }
+  }
+}
+
+/* ==================================================================
+   배경 파츠 프리렌더 (성능: 정적 요소는 오프스크린에 1회만 그림)
+   ================================================================== */
+function makeCanvas(w,h){
+  const cv = document.createElement('canvas');
+  cv.width = w; cv.height = h;
+  const c = cv.getContext('2d');
+  c.imageSmoothingEnabled = false;
+  return { cv, c };
+}
+
+/* 하늘: 4px 밴드 그라데이션 (도트 느낌 유지) */
+function buildSky(){
+  const { cv, c } = makeCanvas(GAME_W, GAME_H);
+  const stops = [
+    {p:0.00,c:'#100820'},{p:0.26,c:'#1d0d3c'},{p:0.48,c:'#331452'},
+    {p:0.64,c:'#5c1f5c'},{p:0.75,c:'#98324f'},{p:0.83,c:'#d1573a'},
+    {p:0.90,c:'#f79a45'},{p:1.00,c:'#ffd07a'}
+  ];
+  for(let y=0; y<GAME_H; y+=PX){
+    c.fillStyle = rampColor(stops, y/(GAME_H-PX));
+    c.fillRect(0, y, GAME_W, PX);
+  }
+  return cv;
+}
+
+/* 산 능선: 정수 배수 사인파 합 => 가로로 완벽히 순환(이음새 없음) */
+function buildRidge(seed, base, amp, rough, cTop, cBody, cDeep){
+  const { cv, c } = makeCanvas(GAME_W, GAME_H);
+  const rnd = mulberry32(seed);
+  const freqs = [1,2,3,5,8], amps = [0.46,0.26,0.15,0.09,0.04], waves = [];
+  for(let k=0;k<freqs.length;k++) waves.push({ f:freqs[k], a:amp*amps[k], p:rnd()*Math.PI*2 });
+
+  const h = new Array(COLS);
+  for(let i=0;i<COLS;i++){
+    let v = 0;
+    for(const w of waves) v += w.a * Math.sin(2*Math.PI*w.f*i/COLS + w.p);
+    v += (hash1(i,seed) - 0.5) * rough;
+    h[i] = snap(base - v);
+  }
+  for(let i=0;i<COLS;i++){
+    const x = i*PX, top = h[i];
+    c.fillStyle = cBody; c.fillRect(x, top, PX, GAME_H - top);
+    c.fillStyle = cTop;  c.fillRect(x, top, PX, PX*2);
+    // 골짜기 그림자 + 수직 암벽 텍스처
+    const dL = h[(i-1+COLS)%COLS] - top, dR = h[(i+1)%COLS] - top;
+    if(dL > PX*3 || dR > PX*3){ c.fillStyle = cDeep; c.fillRect(x, top+PX*2, PX, PX*4); }
+    if(hash1(i, seed ^ 0x9e37) > 0.87){
+      c.fillStyle = cDeep;
+      c.fillRect(x, top + PX*2, PX, PX * (3 + Math.floor(hash1(i, seed ^ 0x51)*7)));
+    }
+  }
+  return cv;
+}
+
+/* 로고: 도트 텍스트를 오프스크린에 1회 렌더 (불꽃 그라데이션 + 외곽선 + 그림자) */
+function buildLogo(text, s){
+  const pad = s*4;
+  const { cv, c } = makeCanvas(textWidth(text,s,s) + pad*2, FONT_H*s + pad*2);
+  drawText(c, text, pad, pad, s, {
+    shadow:'#000000', shadowOff: s*2,
+    outline: PAL.outline,
+    color: r => PAL.fire[r]
+  });
+  return cv;
+}
+
+/* 픽셀 원 (달, 구슬 등) */
+function fillPixelCircle(ctx, cx, cy, r, color){
+  ctx.fillStyle = color;
+  for(let y = -r; y <= r; y += PX){
+    const dx = Math.sqrt(Math.max(0, r*r - y*y));
+    const w = snap(dx*2);
+    if(w <= 0) continue;
+    ctx.fillRect(snap(cx - dx), snap(cy + y), w, PX);
+  }
+}
+
+/* ==================================================================
+   TitleScene
+   ================================================================== */
+class TitleScene extends Scene {
+  enter(){
+    this.t = 0;
+    this.sky   = buildSky();
+    this.far   = buildRidge(1337, 604, 150, 26, '#4a2a63', '#2b1440', '#1b0c2c');
+    this.near  = buildRidge(4242, 700,  92, 44, '#3a1c4e', '#170a26', '#0d0518');
+    this.logoA = buildLogo('DRAGON', 13);
+    this.logoB = buildLogo('STRIKER', 13);
+    this.offFar = 0; this.offNear = 0;
+
+    // 별
+    const rnd = mulberry32(77);
+    this.stars = [];
+    for(let i=0;i<170;i++){
+      this.stars.push({
+        x: snap(rnd()*GAME_W), y: snap(rnd()*470),
+        s: rnd() > 0.88 ? PX*2 : PX,
+        ph: rnd()*Math.PI*2, sp: 1.2 + rnd()*2.6,
+        c: rnd() > 0.8 ? PAL.cyan : (rnd() > 0.5 ? PAL.white : '#cbb6ff')
+      });
+    }
+    // 구름 (지평선 근처, 느린 패럴랙스)
+    this.clouds = [];
+    for(let i=0;i<7;i++){
+      this.clouds.push({
+        x: rnd()*GAME_W, y: snap(340 + rnd()*160),
+        w: snap(140 + rnd()*220), h: snap(12 + rnd()*16),
+        sp: 5 + rnd()*9, c: rnd() > 0.5 ? '#3d1b4e' : '#4d2350'
+      });
+    }
+    this.embers = [];
+    this.emberT = 0;
+    this.shoot  = null;
+    this.shootT = 2.5;
+  }
+
+  update(dt){
+    this.t += dt;
+    this.offFar  = (this.offFar  + 6*dt)  % GAME_W;
+    this.offNear = (this.offNear + 15*dt) % GAME_W;
+
+    // 구름
+    for(const c of this.clouds){
+      c.x -= c.sp*dt;
+      if(c.x + c.w < 0){ c.x = GAME_W + Math.random()*200; c.y = snap(340 + Math.random()*160); }
+    }
+    // 불씨 파티클
+    this.emberT -= dt;
+    if(this.emberT <= 0){
+      this.emberT = 0.05 + Math.random()*0.07;
+      this.embers.push({
+        x: Math.random()*GAME_W, y: GAME_H + 8,
+        vy: -(28 + Math.random()*55), sw: Math.random()*Math.PI*2,
+        life: 0, max: 3.2 + Math.random()*2.6,
+        s: Math.random() > 0.75 ? PX*2 : PX,
+        c: PAL.fire[1 + Math.floor(Math.random()*4)]
+      });
+    }
+    for(let i=this.embers.length-1; i>=0; i--){
+      const e = this.embers[i];
+      e.life += dt; e.y += e.vy*dt; e.sw += dt*2.2;
+      if(e.life >= e.max || e.y < -10) this.embers.splice(i,1);
+    }
+    // 별똥별
+    this.shootT -= dt;
+    if(!this.shoot && this.shootT <= 0){
+      this.shoot = { x: Math.random()*GAME_W*0.7, y: -20, vx: 220, vy: 150, life: 0 };
+    }
+    if(this.shoot){
+      const s = this.shoot;
+      s.life += dt; s.x += s.vx*dt; s.y += s.vy*dt;
+      if(s.y > 460 || s.x > GAME_W + 40){ this.shoot = null; this.shootT = 4 + Math.random()*6; }
+    }
+
+    if(!this.mgr.busy && Input.pressed('confirm')) this.mgr.change(new StubScene());
+  }
+
+  render(ctx){
+    const t = this.t;
+    ctx.drawImage(this.sky, 0, 0);
+
+    // ---- 별 (반짝임) ----
+    for(const st of this.stars){
+      const a = 0.30 + 0.70 * (0.5 + 0.5*Math.sin(t*st.sp + st.ph));
+      ctx.globalAlpha = a;
+      ctx.fillStyle = st.c;
+      ctx.fillRect(st.x, st.y, st.s, st.s);
+      if(st.s > PX && a > 0.8){   // 큰 별은 십자 반짝임
+        ctx.fillRect(st.x - PX, st.y + PX*0.5, PX, PX);
+        ctx.fillRect(st.x + st.s, st.y + PX*0.5, PX, PX);
+        ctx.fillRect(st.x + PX*0.5, st.y - PX, PX, PX);
+        ctx.fillRect(st.x + PX*0.5, st.y + st.s, PX, PX);
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    // ---- 별똥별 ----
+    if(this.shoot){
+      const s = this.shoot;
+      for(let i=0;i<10;i++){
+        ctx.globalAlpha = 1 - i/10;
+        ctx.fillStyle = i < 3 ? PAL.white : PAL.cyan;
+        ctx.fillRect(snap(s.x - s.vx*0.012*i), snap(s.y - s.vy*0.012*i), PX, PX);
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // ---- 달 ----
+    const mx = 1096, my = 132;
+    for(let i=3;i>=1;i--){
+      ctx.globalAlpha = 0.05*i;
+      fillPixelCircle(ctx, mx, my, 60 + i*14, '#ffdfa0');
+    }
+    ctx.globalAlpha = 1;
+    fillPixelCircle(ctx, mx, my, 60, '#f7e6bd');
+    fillPixelCircle(ctx, mx - 18, my - 14, 13, '#e2cda0');
+    fillPixelCircle(ctx, mx + 20, my + 10, 17, '#e2cda0');
+    fillPixelCircle(ctx, mx + 2,  my + 34, 9,  '#e2cda0');
+
+    // ---- 구름 ----
+    for(const c of this.clouds){
+      ctx.fillStyle = c.c;
+      const x = snap(c.x);
+      ctx.fillRect(x, c.y, c.w, c.h);
+      ctx.fillRect(x + snap(c.w*0.18), c.y - PX*2, snap(c.w*0.5), PX*2);
+      ctx.fillRect(x + snap(c.w*0.34), c.y - PX*4, snap(c.w*0.24), PX*2);
+      ctx.fillRect(x - PX*3, c.y + c.h - PX*2, c.w + PX*6, PX*2);
+    }
+
+    // ---- 산 (패럴랙스 2레이어) ----
+    const fx = -snap(this.offFar), nx = -snap(this.offNear);
+    ctx.drawImage(this.far,  fx, 0);  ctx.drawImage(this.far,  fx + GAME_W, 0);
+    ctx.drawImage(this.near, nx, 0);  ctx.drawImage(this.near, nx + GAME_W, 0);
+
+    // ---- 불씨 ----
+    for(const e of this.embers){
+      const k = e.life / e.max;
+      ctx.globalAlpha = k < 0.15 ? k/0.15 : (1 - k) * 0.95;
+      ctx.fillStyle = e.c;
+      ctx.fillRect(snap(e.x + Math.sin(e.sw)*10), snap(e.y), e.s, e.s);
+    }
+    ctx.globalAlpha = 1;
+
+    // ---- 로고 ----
+    const bob = snap(Math.sin(t*1.6)*6);
+    this.drawLogo(ctx, this.logoA, 640, 104 + bob, t);
+    this.drawLogo(ctx, this.logoB, 640, 214 + bob, t + 0.35);
+
+    // 장식 라인
+    const lw = 300 + Math.round(Math.sin(t*2)*4)*PX;
+    ctx.fillStyle = PAL.goldDim;
+    ctx.fillRect(snap(640 - lw/2), 380, lw, PX);
+    ctx.fillStyle = PAL.gold;
+    ctx.fillRect(snap(640 - PX*5), 376, PX*10, PX*3);
+
+    drawText(ctx, 'PIXEL DRAGON SHOOTER', 640, 400, 3,
+      { align:'center', color:PAL.gold, shadow:'#000', spacing:4 });
+
+    // ---- PRESS ENTER (깜빡임) ----
+    const on = (t*1.55 % 1) < 0.62;
+    if(on){
+      drawText(ctx, 'PRESS ENTER TO START', 640, 462, 5,
+        { align:'center', color:(r)=> r<2 ? PAL.white : PAL.gold, outline:PAL.outline, shadow:'#000', shadowOff:8 });
+    }
+    drawText(ctx, 'OR TAP / CLICK ANYWHERE', 640, 528, 2,
+      { align:'center', color:PAL.dim, alpha:0.85 });
+
+    // ---- 하단 정보 ----
+    ctx.globalAlpha = 0.55; ctx.fillStyle = '#000';
+    ctx.fillRect(0, 656, GAME_W, 64); ctx.globalAlpha = 1;
+    ctx.fillStyle = PAL.outline; ctx.fillRect(0, 652, GAME_W, PX);
+
+    drawText(ctx, 'MOVE: WASD / ARROWS   MISSILE: Q   BOMB: E   PAUSE: ESC', 640, 672, 2,
+      { align:'center', color:PAL.dim });
+    drawText(ctx, 'PHASE 1 - V0.1', 1264, 700, 2, { align:'right', color:PAL.goldDim });
+    drawText(ctx, 'F3: DEBUG', 16, 700, 2, { color:PAL.goldDim });
+
+    if(DEBUG) drawHUDDebug(ctx);
+  }
+
+  /* 로고 1개 그리기: 소프트 블룸 + 픽셀 원본 */
+  drawLogo(ctx, img, cx, y, t){
+    const x = snap(cx - img.width/2);
+    const g = 1.06, pulse = 0.16 + 0.10*Math.sin(t*2.2);
+    ctx.imageSmoothingEnabled = true;
+    ctx.globalAlpha = pulse;
+    ctx.drawImage(img, x - img.width*(g-1)/2, y - img.height*(g-1)/2, img.width*g, img.height*g);
+    ctx.globalAlpha = 1;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, x, y);
+  }
+}
+
+/* ==================================================================
+   StubScene - Phase 2 자리 (씬 전환 동작 확인용 임시 씬)
+   ================================================================== */
+class StubScene extends Scene {
+  enter(){ this.t = 0; }
+  update(dt){
+    this.t += dt;
+    if(!this.mgr.busy && (Input.pressed('pause') || Input.pressed('back') || Input.pressed('confirm')))
+      this.mgr.change(new TitleScene());
+  }
+  render(ctx){
+    ctx.fillStyle = '#0d0620'; ctx.fillRect(0,0,GAME_W,GAME_H);
+    // 체크 패턴 배경
+    ctx.fillStyle = '#130a2a';
+    for(let y=0;y<GAME_H;y+=64) for(let x=((y/64)%2)*64; x<GAME_W; x+=128) ctx.fillRect(x,y,64,64);
+
+    drawText(ctx, 'CHARACTER SELECT', 640, 250, 8,
+      { align:'center', color:(r)=>PAL.fire[r], outline:PAL.outline, shadow:'#000', shadowOff:10 });
+    drawText(ctx, 'COMING IN PHASE 2', 640, 350, 4, { align:'center', color:PAL.dim });
+
+    const on = (this.t*1.55 % 1) < 0.62;
+    if(on) drawText(ctx, 'ESC TO GO BACK', 640, 470, 4, { align:'center', color:PAL.gold, shadow:'#000' });
+
+    if(DEBUG) drawHUDDebug(ctx);
+  }
+}
+
+/* ==================================================================
+   디버그 HUD
+   ================================================================== */
+let DEBUG = false;
+const Perf = { fps: 0, _acc: 0, _n: 0, ms: 0 };
+function drawHUDDebug(ctx){
+  ctx.globalAlpha = 0.6; ctx.fillStyle = '#000'; ctx.fillRect(GAME_W-186, 8, 178, 40); ctx.globalAlpha = 1;
+  drawText(ctx, 'FPS ' + Perf.fps, GAME_W-178, 14, 3, { color: Perf.fps >= 57 ? PAL.fire[1] : '#ff4d5a' });
+  drawText(ctx, Perf.ms.toFixed(2) + ' MS', GAME_W-178, 34, 2, { color: PAL.dim });
+}
+
+/* ==================================================================
+   부트스트랩 : 캔버스 / 리사이즈 / 방향 / 메인 루프
+   ================================================================== */
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d', { alpha:false });
+ctx.imageSmoothingEnabled = false;
+
+const rotateEl = document.getElementById('rotate');
+let portrait = false;
+
+function resize(){
+  const vw = window.innerWidth, vh = window.innerHeight;
+  portrait = vh > vw;
+  rotateEl.classList.toggle('show', portrait);
+  const scale = Math.min(vw / GAME_W, vh / GAME_H);
+  canvas.style.width  = Math.floor(GAME_W * scale) + 'px';
+  canvas.style.height = Math.floor(GAME_H * scale) + 'px';
+}
+addEventListener('resize', resize);
+addEventListener('orientationchange', () => setTimeout(resize, 120));
+resize();
+
+Input.init(canvas);
+
+const scenes = new SceneManager();
+scenes.set(new TitleScene());
+
+const FIXED = 1/60, MAX_STEPS = 5;
+let last = performance.now(), acc = 0;
+
+document.addEventListener('visibilitychange', () => { if(!document.hidden) last = performance.now(); });
+
+function frame(now){
+  requestAnimationFrame(frame);
+  let dt = (now - last) / 1000;
+  last = now;
+
+  if(portrait){ acc = 0; Input.endFrame(); return; }   // 세로 모드: 게임 로직 완전 정지
+  if(dt > 0.25) dt = 0.25;
+
+  const t0 = performance.now();
+  Input.pollPad();
+  if(Input.pressed('debug')) DEBUG = !DEBUG;
+
+  acc += dt;
+  let steps = 0;
+  while(acc >= FIXED && steps < MAX_STEPS){ scenes.update(FIXED); acc -= FIXED; steps++; }
+  if(steps === MAX_STEPS) acc = 0;                     // 과부하 시 시간 누적 폐기
+
+  scenes.render(ctx);
+  if(steps > 0) Input.endFrame();                      // 고주사율에서 입력 유실 방지
+
+  // FPS 측정
+  Perf._acc += dt; Perf._n++;
+  if(Perf._acc >= 0.5){ Perf.fps = Math.round(Perf._n / Perf._acc); Perf._acc = 0; Perf._n = 0; }
+  Perf.ms = performance.now() - t0;
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
