@@ -549,7 +549,14 @@ const KEYNAME_TO_CODE = {
   w:'KeyW', a:'KeyA', s:'KeyS', d:'KeyD',
   '`':'Backquote', '~':'Backquote', '1':'Digit1', '!':'Digit1',
   '[':'BracketLeft', ']':'BracketRight',
-  alt:'AltRight', altgraph:'AltRight', control:'ControlRight', ctrl:'ControlRight'
+  alt:'AltRight', altgraph:'AltRight', control:'ControlRight', ctrl:'ControlRight',
+  // 한글(두벌식) 입력 상태에서 e.code 까지 비어 오는 기기 대응.
+  // e.key 로 들어오는 자모를 물리 키 위치로 되돌린다.
+  'ㅂ':'KeyQ', 'ㅃ':'KeyQ', 'ㅈ':'KeyW', 'ㅉ':'KeyW', 'ㄷ':'KeyE', 'ㄸ':'KeyE',
+  'ㄱ':'KeyR', 'ㄲ':'KeyR', 'ㅅ':'KeyT', 'ㅆ':'KeyT',
+  'ㅁ':'KeyA', 'ㄴ':'KeyS', 'ㅇ':'KeyD', 'ㄹ':'KeyF',
+  'ㅋ':'KeyZ', 'ㅌ':'KeyX', 'ㅊ':'KeyC', 'ㅍ':'KeyV',
+  'ㅡ':'KeyM', 'ㅔ':'KeyP', 'ㅐ':'KeyO'
 };
 function resolveKeyCode(e){
   // Alt / Control 은 좌우를 구분해야 하므로 location 을 먼저 본다
@@ -3302,6 +3309,7 @@ class GameScene extends Scene {
     this.p2 = null;                 // 2P 는 게임 도중 WASD 로 난입
     this.joining = false;           // 2P 캐릭터 선택 중
     this.joinSel = 0; this.joinT = 0;
+    this.p1UsesKeys = false;        // 1P 가 방향키를 쓴 적이 있는가
 
     this.stick = new VirtualStick(makeStickCfg());
     this.buildButtons();
@@ -3318,9 +3326,9 @@ class GameScene extends Scene {
         if(this.btnBomb.down(id,x,y)) return;
         if(this.btnMsl2 && this.btnMsl2.down(id,x,y)) return;
         if(this.btnBomb2 && this.btnBomb2.down(id,x,y)) return;
-        if(!this.p2) this.stick.down(id,x,y);
+        if(this.stickVisible()) this.stick.down(id,x,y);
       },
-      move:(id,x,y) => { if(!this.p2) this.stick.move(id,x,y); },
+      move:(id,x,y) => { if(this.stickVisible()) this.stick.move(id,x,y); },
       up:  (id)     => {
         this.btnMsl.up(id); this.btnBomb.up(id);
         if(this.btnMsl2) this.btnMsl2.up(id);
@@ -3365,6 +3373,10 @@ class GameScene extends Scene {
   }
   exit(){ Input.pointerHandler = null; }
 
+  /* 1P 가 터치로 조작 중이면(방향키를 쓴 적이 없으면) 스틱을 남겨둔다.
+     폰에서 1P 터치 + 2P 키보드 조합도 가능하도록. */
+  stickVisible(){ return !this.p2 || !this.p1UsesKeys; }
+
   /* 1인일 때는 오른쪽에만, 2인일 때는 좌우로 나눠 배치한다 */
   buildButtons(){
     const o = optGet();
@@ -3374,12 +3386,24 @@ class GameScene extends Scene {
     this.btnBomb = new TouchButton(GAME_W - br2 - 24, my - br - 40, br2, ICON_BOMB, 4, PAL.gold, this.p2 ? '1P' : '');
     this.btnMsl.alpha = this.btnBomb.alpha = o.btnAlpha;
     if(this.p2){
-      this.btnMsl2  = new TouchButton(br + 140, my, br, ICON_MISSILE, 4, P2_COLOR, '2P');
-      this.btnBomb2 = new TouchButton(br2 + 24, my - br - 40, br2, ICON_BOMB, 4, PAL.gold, '2P');
+      // 스틱이 남아 있으면 겹치지 않도록 2P 버튼을 위로 올린다
+      const y2 = this.stickVisible() ? 300 : my;
+      this.btnMsl2  = new TouchButton(br + 140, y2, br, ICON_MISSILE, 4, P2_COLOR, '2P');
+      this.btnBomb2 = new TouchButton(br2 + 24, y2 - br - 40, br2, ICON_BOMB, 4, PAL.gold, '2P');
       this.btnMsl2.alpha = this.btnBomb2.alpha = o.btnAlpha;
     }else{
       this.btnMsl2 = this.btnBomb2 = null;
     }
+  }
+  /* 2P 퇴장 (실수로 참가했을 때 되돌리기) */
+  leave2P(){
+    if(!this.p2) return;
+    this.p1.missileCount += this.p2.missileCount;
+    this.p1.bombCount    += this.p2.bombCount;
+    this.p2 = null; this.joining = false;
+    this.buildButtons();
+    Popups.add(this.p1.x, this.p1.y - 90, '1P SOLO', P1_COLOR, 4);
+    SND.sfx('deny');
   }
 
   players(){ return this.p2 ? [this.p1, this.p2] : [this.p1]; }
@@ -3448,7 +3472,7 @@ class GameScene extends Scene {
     this.p2 = new Player(320, GAME_H/2 + 90, Save.data.level, this.joinSel, 2);
     this.p2.missileCount = this.p1.missileCount;      // 난입 시 같은 수량으로 시작
     this.p2.bombCount = this.p1.bombCount;
-    this.stick.up(this.stick.pid);
+    if(this.p1UsesKeys) this.stick.up(this.stick.pid);
     this.buildButtons();
     Popups.add(this.p2.x, this.p2.y - 90, '2P JOIN!', P2_COLOR, 5);
     SND.sfx('levelup'); Flash.add(P2_COLOR, 0.2, 0.35);
@@ -3477,13 +3501,20 @@ class GameScene extends Scene {
     if(this.score > (Save.data.best[this.stage] || 0)) Save.data.best[this.stage] = this.score;
     Save.save();
   }
+  pauseItems(){
+    return this.p2 ? ['RESUME', '2P LEAVE', 'QUIT TO TITLE'] : ['RESUME', 'QUIT TO TITLE'];
+  }
   updatePaused(dt){
     this.stateT += dt;
     const tap = this.uiTap; this.uiTap = false;
-    if(Input.pressed('up') || Input.pressed('down')) this.menuIdx = (this.menuIdx + 1) % 2;
+    const n = this.pauseItems().length;
+    if(Input.pressed('up'))   this.menuIdx = (this.menuIdx + n - 1) % n;
+    if(Input.pressed('down')) this.menuIdx = (this.menuIdx + 1) % n;
     if(Input.pressed('pause')){ this.setPause(false); return; }
     if(Input.pressed('confirm') || tap){
-      if(this.menuIdx === 0) this.setPause(false);
+      const pick = this.pauseItems()[this.menuIdx];
+      if(pick === 'RESUME') this.setPause(false);
+      else if(pick === '2P LEAVE'){ this.leave2P(); this.menuIdx = 0; this.setPause(false); }
       else this.mgr.change(new StageSelectScene(this.stage));
     }
   }
@@ -3509,8 +3540,10 @@ class GameScene extends Scene {
   updatePlayer(p, dt){
     let mv;
     if(p.pid === 1){
-      const sv = this.p2 ? {x:0,y:0} : this.stick.vector();
-      mv = (sv.x || sv.y) ? sv : Input.moveVectorFor(1);
+      const kv = Input.moveVectorFor(1);
+      if(kv.x || kv.y) this.p1UsesKeys = true;          // 방향키를 쓰면 스틱을 감춘다
+      const sv = this.stickVisible() ? this.stick.vector() : {x:0,y:0};
+      mv = (sv.x || sv.y) ? sv : kv;
     }else{
       mv = Input.moveVectorFor(2);
     }
@@ -3579,6 +3612,10 @@ class GameScene extends Scene {
     if(!this.p2 && !this.joining && Input.pressed('p2join')) this.startJoin();
     if(this.joining){
       this.joinT += dt;
+      if(Input.pressed('pause') || Input.pressed('back')){    // 선택 취소
+        this.joining = false; SND.sfx('deny');
+        return;
+      }
       if(Input.pressed('p2left'))  { this.joinSel = (this.joinSel + 9) % 10; SND.sfx('blip'); }
       if(Input.pressed('p2right')) { this.joinSel = (this.joinSel + 1) % 10; SND.sfx('blip'); }
       if(Input.pressed('p2up'))    { this.joinSel = (this.joinSel + 5) % 10; SND.sfx('blip'); }
@@ -3806,7 +3843,7 @@ class GameScene extends Scene {
     if(this.weather) this.weather.renderFront(ctx);
     for(const r of this.roars) r.render(ctx);
 
-    if(!this.p2) this.stick.render(ctx);
+    if(this.stickVisible()) this.stick.render(ctx);
     this.btnMsl.render(ctx, this.p1.missileCount);
     this.btnBomb.render(ctx, this.p1.bombCount);
     if(this.btnMsl2){
@@ -3841,7 +3878,7 @@ class GameScene extends Scene {
     drawText(ctx, DRAGONS[this.joinSel].id, 640, y0 + H - 30, 3,
       { align:'center', color:PAL.white, outline:PAL.outline });
     if(Math.floor(this.joinT*2.4) % 2 === 0)
-      drawText(ctx, 'A D : SELECT      ` OR 1 : JOIN', 640, y0 + H - 8, 2,
+      drawText(ctx, 'A D : SELECT      ` OR 1 : JOIN      ESC : CANCEL', 640, y0 + H - 8, 2,
         { align:'center', color:PAL.gold });
   }
 
@@ -3874,7 +3911,7 @@ class GameScene extends Scene {
       { align:'right', color:PAL.gold, outline:PAL.outline, shadow:'#000', shadowOff:4 });
     drawText(ctx, 'STAGE ' + this.stage + ' - ' + this.theme.n, 640, 52, 2,
       { align:'center', color:'#dff0ff', shadow:'#0a1830' });
-    if(!this.p2)
+    if(!this.p2 && !this.joining)
       drawText(ctx, 'PRESS W A S D TO JOIN 2P', 640, 74, 2,
         { align:'center', color:P2_COLOR, alpha: 0.5 + Math.sin(this.t*3)*0.3 });
 
@@ -3939,9 +3976,9 @@ class GameScene extends Scene {
     ctx.globalAlpha = 1;
     drawText(ctx, 'PAUSED', 640, 208, 11,
       { align:'center', color:(r)=>PAL.fire[r], outline:PAL.outline, shadow:'#000', shadowOff:10 });
-    const items = ['RESUME', 'QUIT TO TITLE'];
+    const items = this.pauseItems();
     for(let i=0;i<items.length;i++){
-      const on = i === this.menuIdx, y = 380 + i*66;
+      const on = i === this.menuIdx, y = 360 + i*62;
       if(on){
         drawText(ctx, '>', 400, y, 5, { color:PAL.gold, outline:PAL.outline });
         drawText(ctx, '<', 880, y, 5, { align:'right', color:PAL.gold, outline:PAL.outline });
