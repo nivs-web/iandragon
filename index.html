@@ -208,6 +208,268 @@ function drawText(ctx, text, x, y, s, opt){
 }
 
 /* ==================================================================
+   Phase 9 : 사운드 (Web Audio 로 전부 합성. 외부 파일 없음)
+   - BGM 3곡을 스텝 시퀀서로 연주 (베이스/리드/코드/드럼)
+   - 효과음은 오실레이터 + 노이즈 버퍼로 즉석 합성
+   ================================================================== */
+const R_ = -99;                                   // 쉼표
+
+function midiFreq(n){ return 440 * Math.pow(2, (n - 69) / 12); }
+
+/* 32스텝(16분음표) 루프. 숫자는 루트로부터의 반음. */
+const BGM_TRACKS = [
+  { name:'DRAGON FURY', bpm:172, root:40, swing:0,      // E 마이너 / 질주하는 메탈
+    bass:[0,R_,0,0, 0,R_,0,0, 0,R_,0,0, 3,R_,3,3,
+          5,R_,5,5, 5,R_,5,5, 3,R_,3,3, 0,R_,0,-2],
+    lead:[24,R_,27,31, R_,29,27,R_, 24,R_,27,R_, 31,R_,R_,R_,
+          29,R_,27,24, R_,22,24,R_, 27,R_,24,R_, 22,R_,R_,R_],
+    chord:[12,R_,R_,R_, R_,R_,R_,R_, 15,R_,R_,R_, R_,R_,R_,R_,
+           17,R_,R_,R_, R_,R_,R_,R_, 15,R_,R_,R_, 12,R_,R_,R_],
+    kick: '1...1...1...1...1...1...1.1.1...',
+    snare:'....1.......1.......1.......1...',
+    hat:  '..1...1...1...1...1...1...1...1.',
+    leadType:'square', bassType:'sawtooth' },
+
+  { name:'SKY ASSAULT', bpm:146, root:45,               // A 마이너 / 군악 + 신스웨이브
+    bass:[0,R_,R_,0, 7,R_,R_,R_, 0,R_,R_,0, 7,R_,R_,R_,
+          -2,R_,R_,-2, 5,R_,R_,R_, 3,R_,R_,3, 10,R_,R_,R_],
+    lead:[24,28,31,28, 24,R_,R_,R_, 26,29,33,29, 26,R_,R_,R_,
+          22,26,29,26, 22,R_,R_,R_, 27,31,34,31, 36,R_,R_,R_],
+    chord:[12,R_,16,R_, 19,R_,R_,R_, 12,R_,16,R_, 19,R_,R_,R_,
+           10,R_,14,R_, 17,R_,R_,R_, 15,R_,19,R_, 22,R_,R_,R_],
+    kick: '1.......1.......1.......1.......',
+    snare:'....1...1...1.1.....1...1...1.1.',
+    hat:  '1.1.1.1.1.1.1.1.1.1.1.1.1.1.1.1.',
+    leadType:'triangle', bassType:'square' },
+
+  { name:'PIXEL STORM', bpm:154, root:43,               // G / 아케이드 액션
+    bass:[0,R_,12,R_, 0,R_,12,R_, 5,R_,17,R_, 5,R_,17,R_,
+          7,R_,19,R_, 7,R_,19,R_, 3,R_,15,R_, -2,R_,10,R_],
+    lead:[19,R_,22,24, 26,R_,24,22, 19,R_,17,19, 22,R_,R_,R_,
+          24,R_,26,27, 29,R_,27,26, 24,R_,22,24, 19,R_,R_,R_],
+    chord:[7,R_,R_,R_, 11,R_,R_,R_, 12,R_,R_,R_, 11,R_,R_,R_,
+           14,R_,R_,R_, 12,R_,R_,R_, 10,R_,R_,R_, 7,R_,R_,R_],
+    kick: '1..1..1.1..1..1.1..1..1.1..1..1.',
+    snare:'....1.......1.......1.......1...',
+    hat:  '..1...1...1...1...1...1...1...1.',
+    leadType:'square', bassType:'square' }
+];
+
+const SND = {
+  ctx:null, master:null, bgmG:null, sfxG:null, comp:null, noiseBuf:null,
+  ready:false, bgmOn:true, sfxOn:true, bgmVol:0.34, sfxVol:0.55,
+  bgm:{ idx:0, playing:false, step:0, nextT:0 },
+  _cool:{},
+
+  init(){
+    if(this.ctx) return this.ready;
+    try{
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if(!AC) return false;
+      this.ctx = new AC();
+      this.comp = this.ctx.createDynamicsCompressor();
+      this.comp.threshold.value = -14; this.comp.knee.value = 20;
+      this.comp.ratio.value = 12; this.comp.attack.value = 0.003; this.comp.release.value = 0.25;
+      this.master = this.ctx.createGain(); this.master.gain.value = 0.9;
+      this.bgmG = this.ctx.createGain(); this.bgmG.gain.value = this.bgmOn ? this.bgmVol : 0;
+      this.sfxG = this.ctx.createGain(); this.sfxG.gain.value = this.sfxOn ? this.sfxVol : 0;
+      this.bgmG.connect(this.comp); this.sfxG.connect(this.comp);
+      this.comp.connect(this.master); this.master.connect(this.ctx.destination);
+      const n = Math.floor(this.ctx.sampleRate * 1.5);
+      const buf = this.ctx.createBuffer(1, n, this.ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for(let i=0;i<n;i++) d[i] = Math.random()*2 - 1;
+      this.noiseBuf = buf;
+      this.ready = true;
+    }catch(e){ this.ready = false; }
+    return this.ready;
+  },
+  /* 브라우저 자동재생 정책상 첫 사용자 입력 이후에만 소리가 난다 */
+  resume(){
+    if(!this.init()) return;
+    if(this.ctx.state === 'suspended') this.ctx.resume();
+  },
+  setBgmOn(v){ this.bgmOn = v; if(this.bgmG) this.bgmG.gain.value = v ? this.bgmVol : 0; },
+  setSfxOn(v){ this.sfxOn = v; if(this.sfxG) this.sfxG.gain.value = v ? this.sfxVol : 0; },
+
+  /* ---------------- 기본 음원 ---------------- */
+  tone(freq, t0, dur, type, vol, glideTo, dest){
+    const c = this.ctx;
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = type || 'square';
+    o.frequency.setValueAtTime(Math.max(20, freq), t0);
+    if(glideTo) o.frequency.exponentialRampToValueAtTime(Math.max(20, glideTo), t0 + dur);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.linearRampToValueAtTime(vol, t0 + Math.min(0.008, dur*0.2));
+    g.gain.exponentialRampToValueAtTime(0.0006, t0 + dur);
+    o.connect(g); g.connect(dest || this.sfxG);
+    o.start(t0); o.stop(t0 + dur + 0.03);
+  },
+  noise(t0, dur, vol, fFrom, fTo, dest, q){
+    const c = this.ctx;
+    const s = c.createBufferSource(); s.buffer = this.noiseBuf; s.loop = true;
+    const f = c.createBiquadFilter(); f.type = 'lowpass';
+    f.frequency.setValueAtTime(Math.max(60, fFrom), t0);
+    f.frequency.exponentialRampToValueAtTime(Math.max(60, fTo), t0 + dur);
+    if(q) f.Q.value = q;
+    const g = c.createGain();
+    g.gain.setValueAtTime(vol, t0);
+    g.gain.exponentialRampToValueAtTime(0.0006, t0 + dur);
+    s.connect(f); f.connect(g); g.connect(dest || this.sfxG);
+    s.start(t0); s.stop(t0 + dur + 0.03);
+  },
+  /* 같은 소리가 몰릴 때 겹침 방지 */
+  _gate(key, ms){
+    const now = performance.now();
+    if(this._cool[key] && now - this._cool[key] < ms) return false;
+    this._cool[key] = now; return true;
+  },
+
+  /* ---------------- 효과음 ---------------- */
+  sfx(name, a){
+    if(!this.ready || !this.sfxOn || this.ctx.state !== 'running') return;
+    const c = this.ctx, t = c.currentTime;
+    switch(name){
+      case 'fire': {                       // 뚜뚜뚜 (레벨이 오를수록 낮고 굵게)
+        if(!this._gate('fire', 55)) return;
+        const lv = a || 1, k = 1 - (lv-1)/12;
+        this.tone(760*k + 120, t, 0.05, 'square', 0.16, 300*k + 90);
+        this.noise(t, 0.045, 0.13, 2600*k + 700, 500, null);
+        if(lv >= 7) this.tone(96, t, 0.10, 'sawtooth', 0.16, 52);   // 저역 울림
+        break;
+      }
+      case 'hit':                          // 퍽
+        if(!this._gate('hit', 40)) return;
+        this.noise(t, 0.07, 0.20, 3200, 700);
+        this.tone(220, t, 0.06, 'square', 0.10, 110);
+        break;
+      case 'boomS':                        // 작은 펑
+        if(!this._gate('boomS', 45)) return;
+        this.noise(t, 0.26, 0.34, 2400, 180);
+        this.tone(180, t, 0.22, 'sawtooth', 0.18, 46);
+        break;
+      case 'boomM':                        // 중형 펑펑 (2연발)
+        if(!this._gate('boomM', 70)) return;
+        this.noise(t, 0.42, 0.44, 2000, 110);
+        this.tone(140, t, 0.34, 'sawtooth', 0.24, 34);
+        this.noise(t + 0.09, 0.30, 0.30, 1500, 100);
+        break;
+      case 'boomL':                        // 대형 연쇄 폭발
+        for(let i=0;i<4;i++){
+          const d = i*0.11;
+          this.noise(t + d, 0.6 - i*0.08, 0.46 - i*0.07, 1800 - i*300, 80);
+          this.tone(120 - i*14, t + d, 0.5, 'sawtooth', 0.26 - i*0.04, 28);
+        }
+        break;
+      case 'missile':                      // 쉬우우웅 + 펑
+        this.noise(t, 0.42, 0.26, 400, 4200, null, 6);
+        this.tone(180, t, 0.34, 'sawtooth', 0.14, 900);
+        this.noise(t + 0.02, 0.14, 0.28, 2600, 300);
+        break;
+      case 'nuke': {                       // 쿠와아앙 (차징 -> 기폭 -> 여운)
+        this.noise(t, 0.45, 0.22, 200, 5000, null, 8);          // 빨려들어가는 차징
+        this.tone(60, t, 0.45, 'sawtooth', 0.16, 420);
+        const b = t + 0.45;
+        this.noise(b, 2.2, 0.75, 4000, 60);                     // 기폭
+        this.tone(90, b, 1.8, 'sawtooth', 0.42, 22);
+        this.tone(45, b, 2.4, 'sine', 0.45, 18);                // 서브 베이스
+        for(let i=0;i<7;i++)                                    // 연쇄 폭발
+          this.noise(b + 0.25 + i*0.16, 0.5, 0.24, 1600, 90);
+        break;
+      }
+      case 'hurt':                         // 쾅
+        this.noise(t, 0.32, 0.42, 1800, 120);
+        this.tone(300, t, 0.28, 'sawtooth', 0.24, 60);
+        break;
+      case 'item':                         // 띠링
+        this.tone(midiFreq(84), t, 0.09, 'square', 0.20);
+        this.tone(midiFreq(91), t + 0.07, 0.16, 'square', 0.20);
+        break;
+      case 'levelup':                      // 파워업 상승음
+        [72,76,79,84].forEach((n,i) => this.tone(midiFreq(n), t + i*0.06, 0.16, 'square', 0.20));
+        break;
+      case 'warn': {                       // 보스 사이렌 + 포효
+        for(let i=0;i<3;i++){
+          this.tone(520, t + i*0.42, 0.34, 'sawtooth', 0.16, 900);
+          this.tone(900, t + i*0.42 + 0.17, 0.2, 'sawtooth', 0.12, 520);
+        }
+        this.tone(70, t + 0.2, 1.1, 'sawtooth', 0.30, 34);      // 드래곤 포효
+        this.noise(t + 0.2, 1.1, 0.22, 900, 120);
+        break;
+      }
+      case 'fanfare':                      // 짜라란 팡팡
+        [72,76,79,84,88].forEach((n,i) => this.tone(midiFreq(n), t + i*0.10, 0.3, 'square', 0.22));
+        for(let i=0;i<4;i++) this.noise(t + 0.55 + i*0.14, 0.34, 0.30, 2200, 140);
+        break;
+      case 'gameover':
+        [72,68,64,59].forEach((n,i) => this.tone(midiFreq(n), t + i*0.20, 0.42, 'triangle', 0.22));
+        this.noise(t, 0.9, 0.14, 700, 90);
+        break;
+      case 'blip':
+        if(!this._gate('blip', 40)) return;
+        this.tone(midiFreq(79), t, 0.05, 'square', 0.16);
+        break;
+      case 'confirm':
+        this.tone(midiFreq(76), t, 0.07, 'square', 0.20);
+        this.tone(midiFreq(83), t + 0.06, 0.14, 'square', 0.20);
+        break;
+      case 'deny':
+        this.tone(160, t, 0.16, 'square', 0.20, 90);
+        break;
+    }
+  },
+
+  /* ---------------- BGM 시퀀서 ---------------- */
+  playBgm(i){
+    if(!this.init()) return;
+    if(i !== undefined) this.bgm.idx = clamp(i, 0, BGM_TRACKS.length-1);
+    if(this.bgm.playing) return;
+    this.bgm.playing = true;
+    this.bgm.step = 0;
+    this.bgm.nextT = this.ctx.currentTime + 0.08;
+  },
+  switchBgm(i){
+    const n = clamp(i, 0, BGM_TRACKS.length-1);
+    if(n === this.bgm.idx && this.bgm.playing) return;
+    this.bgm.idx = n; this.bgm.step = 0;
+    if(this.ctx) this.bgm.nextT = this.ctx.currentTime + 0.08;
+    this.bgm.playing = true;
+  },
+  stopBgm(){ this.bgm.playing = false; },
+
+  update(){
+    if(!this.ready || !this.bgm.playing || this.ctx.state !== 'running') return;
+    const tr = BGM_TRACKS[this.bgm.idx];
+    const stepDur = 60 / tr.bpm / 4;                    // 16분음표
+    const now = this.ctx.currentTime;
+    // 탭이 백그라운드로 갔다 오면 밀린 스텝을 몰아서 내지 않도록 재동기화
+    if(this.bgm.nextT < now - 0.5) this.bgm.nextT = now + 0.05;
+    const ahead = now + 0.25;
+    let guard = 0;
+    while(this.bgm.nextT < ahead && guard++ < 64){
+      this.scheduleStep(tr, this.bgm.step % 32, this.bgm.nextT, stepDur);
+      this.bgm.step++;
+      this.bgm.nextT += stepDur;
+    }
+  },
+  scheduleStep(tr, i, t, sd){
+    const g = this.bgmG;
+    const b = tr.bass[i];
+    if(b !== undefined && b !== R_) this.tone(midiFreq(tr.root + b), t, sd*1.7, tr.bassType, 0.26, null, g);
+    const l = tr.lead[i];
+    if(l !== undefined && l !== R_) this.tone(midiFreq(tr.root + l), t, sd*1.9, tr.leadType, 0.15, null, g);
+    const c = tr.chord[i];
+    if(c !== undefined && c !== R_){
+      this.tone(midiFreq(tr.root + c),     t, sd*3.2, 'triangle', 0.09, null, g);
+      this.tone(midiFreq(tr.root + c + 7), t, sd*3.2, 'triangle', 0.07, null, g);
+    }
+    if(tr.kick[i]  === '1'){ this.tone(120, t, 0.16, 'sine', 0.44, 42, g); this.noise(t, 0.05, 0.16, 900, 120, g); }
+    if(tr.snare[i] === '1'){ this.noise(t, 0.14, 0.26, 4200, 900, g); this.tone(220, t, 0.09, 'triangle', 0.10, 160, g); }
+    if(tr.hat[i]   === '1'){ this.noise(t, 0.035, 0.10, 9000, 5000, g); }
+  }
+};
+
+/* ==================================================================
    입력 시스템 (키보드 / 터치 / 게임패드 최소 지원)
    ================================================================== */
 const Input = {
@@ -219,7 +481,7 @@ const Input = {
     Enter:'confirm', NumpadEnter:'confirm', Space:'confirm', KeyZ:'confirm',
     Escape:'pause', KeyP:'pause', Backspace:'back', KeyX:'back',
     KeyQ:'missile', KeyE:'bomb', F3:'debug',
-    BracketRight:'lvup', BracketLeft:'lvdown'
+    BracketRight:'lvup', BracketLeft:'lvdown', KeyM:'mute'
   },
   _pad:{ confirm:false, back:false, missile:false, bomb:false },
   padAxis:{ x:0, y:0 },        // 게임패드 왼쪽 스틱
@@ -228,7 +490,9 @@ const Input = {
 
   init(canvas){
     addEventListener('keydown', e => {
+      SND.resume();                       // 자동재생 정책상 첫 입력에서 오디오 활성화
       const a = this.KEYMAP[e.code];
+      if(a === 'mute' && !e.repeat){ SND.setBgmOn(!SND.bgmOn); SND.setSfxOn(SND.bgmOn); }
       if(!a) return;
       if(e.code === 'Space' || e.code === 'Backspace' || e.code.startsWith('Arrow') || e.code === 'F3') e.preventDefault();
       if(e.repeat) return;
@@ -247,6 +511,7 @@ const Input = {
     };
     canvas.addEventListener('pointerdown', e => {
       e.preventDefault();
+      SND.resume();
       canvas.setPointerCapture && canvas.setPointerCapture(e.pointerId);
       const p = toGame(e);
       this.taps++;
@@ -899,7 +1164,7 @@ class Player {
 /* ---------------- 저장 (localStorage. file:// 에서 막혀도 안전하게) ---------------- */
 const Save = {
   KEY: 'dragonstriker.save.v1',
-  data: { unlocked: 1, level: 1, dragon: 0, best: {} },
+  data: { unlocked: 1, level: 1, dragon: 0, bgm: 0, best: {} },
   load(){
     try{
       const j = localStorage.getItem(this.KEY);
@@ -908,10 +1173,11 @@ const Save = {
     this.data.unlocked = clamp(this.data.unlocked|0, 1, 20) || 1;
     this.data.level    = clamp(this.data.level|0, 1, MAX_LEVEL) || 1;
     this.data.dragon   = clamp(this.data.dragon|0, 0, 9);
+    this.data.bgm      = clamp(this.data.bgm|0, 0, 2);
     if(!this.data.best) this.data.best = {};
   },
   save(){ try{ localStorage.setItem(this.KEY, JSON.stringify(this.data)); }catch(e){} },
-  clearAll(){ this.data = { unlocked:1, level:1, dragon:0, best:{} }; this.save(); }
+  clearAll(){ this.data = { unlocked:1, level:1, dragon:0, bgm:0, best:{} }; this.save(); }
 };
 
 /* ---------------- 스테이지 정의 ----------------
@@ -1402,6 +1668,7 @@ class WingZombie {
     this.knock = 260;
     Shake.add(4, 0.05);
     Particles.spawn(this.x - 12, this.y, 8, { ang:-0.15, spread:2.6, spd:380, life:0.32 });
+    SND.sfx('hit');
     if(this.hp <= 0) this.die(scene);
   }
   die(scene){
@@ -1415,6 +1682,7 @@ class WingZombie {
     Popups.add(this.x, this.y - 30, this.score, PAL.fire[1], 3);
     Shake.add(7, 0.11);
     Freeze.add(0.028);
+    SND.sfx('boomS');
   }
   render(ctx){
     const ox = snap(this.x - Z_W/2), oy = snap(this.y - Z_H/2);
@@ -1653,6 +1921,7 @@ class EnemyBase {
     Shake.add(this.isBoss ? 3 : 4, 0.05);
     Particles.spawn(this.x - 14, this.y, this.isBoss ? 6 : 9,
       { ang:-0.15, spread:2.6, spd:380, life:0.32 });
+    SND.sfx('hit');
     if(this.hp <= 0) this.die(scene);
   }
   die(scene){
@@ -1700,6 +1969,7 @@ class DragonRider extends EnemyBase {
     Shake.add(11, 0.18);
     Flash.add('#ffb070', 0.08, 0.20);
     Freeze.add(0.05);
+    SND.sfx('boomM');
   }
   render(ctx){
     drawFormDragon(ctx, RED_DRAGON_PAL, 'A', DR_CELL, this.x, this.y, this.pose, true,
@@ -1756,6 +2026,7 @@ class HeavyRider extends EnemyBase {
     Shake.add(16, 0.3);
     Flash.add('#e0c0ff', 0.12, 0.34);
     Freeze.add(0.075);
+    SND.sfx('boomM');
   }
   render(ctx){
     drawFormDragon(ctx, PURPLE_DRAGON_PAL, 'A', HV_CELL, this.x, this.y, this.pose, true,
@@ -2046,6 +2317,7 @@ class Director {
     this.s.enemies.push(b); this.s.boss = b;
     this.s.bossBannerT = 2.2;
     Shake.add(6, 0.4);
+    SND.sfx('warn');
   }
   spawnBoss(){
     if(this.bossSpawned) return;
@@ -2054,6 +2326,7 @@ class Director {
     this.s.enemies.push(b); this.s.boss = b;
     this.s.bossBannerT = 2.6;
     Shake.add(9, 0.6);
+    SND.sfx('warn');
   }
   onBossKilled(b){
     if(b instanceof MidBoss) this.midKilledAt = this.t;
@@ -2167,6 +2440,7 @@ class PlayerMissile {
     Shake.add(13, 0.24);
     Flash.add('#ffd9a0', 0.10, 0.35);
     Freeze.add(0.05);
+    SND.sfx('boomM');
     // 반경 내 전체 타격
     for(const e of scene.enemies){
       if(e.dead) continue;
@@ -2606,6 +2880,8 @@ function drawPixelRing(ctx, cx, cy, r, thick, color){
 class TitleScene extends Scene {
   enter(){
     this.t = 0;
+    this.bgmSel = Save.data.bgm | 0;
+    SND.playBgm(this.bgmSel);
     this.sky   = buildSky();
     this.far   = buildRidge(1337, 604, 150, 26, '#2b1440', 'peak');
     this.near  = buildRidge(4242, 700,  92, 44, '#170a26', 'peak');
@@ -2677,7 +2953,16 @@ class TitleScene extends Scene {
       if(s.y > 460 || s.x > GAME_W + 40){ this.shoot = null; this.shootT = 4 + Math.random()*6; }
     }
 
-    if(!this.mgr.busy && (Input.pressed('confirm') || Input.taps > 0)) this.mgr.change(new CharacterSelectScene());
+    // BGM 3곡 미리듣기 : 좌우로 즉시 전환 (스펙 7.1)
+    if(Input.pressed('left') || Input.pressed('right')){
+      this.bgmSel = (this.bgmSel + (Input.pressed('right') ? 1 : BGM_TRACKS.length - 1)) % BGM_TRACKS.length;
+      Save.data.bgm = this.bgmSel; Save.save();
+      SND.resume(); SND.switchBgm(this.bgmSel);
+    }
+    if(!this.mgr.busy && (Input.pressed('confirm') || Input.taps > 0)){
+      SND.resume(); SND.playBgm(this.bgmSel); SND.sfx('confirm');
+      this.mgr.change(new CharacterSelectScene());
+    }
   }
 
   render(ctx){
@@ -2775,6 +3060,12 @@ class TitleScene extends Scene {
     ctx.fillRect(0, 656, GAME_W, 64); ctx.globalAlpha = 1;
     ctx.fillStyle = PAL.outline; ctx.fillRect(0, 652, GAME_W, PX);
 
+    // BGM 선택기
+    const tr = BGM_TRACKS[this.bgmSel | 0];
+    drawText(ctx, '< BGM ' + (this.bgmSel+1) + '  ' + tr.name + ' >', 640, 596, 3,
+      { align:'center', color:PAL.gold, outline:PAL.outline, shadow:'#000' });
+    drawText(ctx, 'LEFT / RIGHT TO PREVIEW      M: MUTE', 640, 624, 2,
+      { align:'center', color:PAL.dim });
     drawText(ctx, 'MOVE: WASD / ARROWS   MISSILE: Q   BOMB: E   PAUSE: ESC', 640, 672, 2,
       { align:'center', color:PAL.dim });
     drawText(ctx, 'PHASE 1 - V0.1', 1264, 700, 2, { align:'right', color:PAL.goldDim });
@@ -2910,6 +3201,7 @@ class GameScene extends Scene {
     Freeze.add(big ? 0.16 : 0.11);
     this.waves.push(new Shockwave(b.x, b.y, big ? 1400 : 900, big ? 0.7 : 0.5));
     Popups.add(b.x, b.y - 80, b.score, PAL.fire[0], 7);
+    SND.sfx('boomL');
   }
 
   /* 적이 "격파"되었을 때만 호출 (화면 밖 소멸은 제외) */
@@ -2943,6 +3235,7 @@ class GameScene extends Scene {
         break;
     }
     this.score += 50;
+    SND.sfx(it.kind === ITEM_KIND.POWER ? 'levelup' : 'item');
     this.pickupMsg = msg; this.pickupT = 1.2;
     Particles.spawn(it.x, it.y, 14, { spd:260, life:0.45, grav:-60,
       pal:['#ffffff','#ffe14a','#ffa32e','#ff7a1e'] });
@@ -2960,9 +3253,11 @@ class GameScene extends Scene {
       this.bonus = Math.round(this.timeLeft) * 100 + this.lives * 500;
       this.score += this.bonus;
       this.lives = Math.min(MAX_LIVES, this.lives + 1);      // 클리어 보상 하트 +1
+      SND.sfx('fanfare');
       Save.data.unlocked = Math.max(Save.data.unlocked, Math.min(20, this.stage + 1));
       Save.data.level = this.player.level;                   // 불 레벨은 다음 스테이지로 유지
     }else{
+      SND.sfx('gameover');
       Save.data.level = this.player.level;                   // 죽어서 내려간 레벨도 반영
     }
     if(this.score > (Save.data.best[this.stage] || 0)) Save.data.best[this.stage] = this.score;
@@ -3037,6 +3332,7 @@ class GameScene extends Scene {
         this.bolts.push(new FireBolt(m.x, m.y,  c.spread, lv));
       }
       Particles.spawn(m.x, m.y, 2, { ang:0, spread:0.9, spd:210, life:0.16, grav:0, drag:5 });
+      SND.sfx('fire', lv);
     }
 
     // ---- 탄도미사일 (수동) ----
@@ -3058,6 +3354,7 @@ class GameScene extends Scene {
       Particles.spawn(m.x, m.y, 30, { ang:0, spread:2.2, spd:520, life:0.42, size:PX*2 });
       Shake.add(9, 0.18);
       Flash.add('#ffe9c0', 0.08, 0.22);
+      SND.sfx('missile');
       this.btnMsl.flash = 0.2;
     }
 
@@ -3066,6 +3363,7 @@ class GameScene extends Scene {
       this.bombCount--;
       this.roars.push(new DragonRoar(this));
       this.btnBomb.flash = 0.3;
+      SND.sfx('nuke');
     }
 
     // ---- 웨이브 / 아이템 스폰 ----
@@ -3215,6 +3513,7 @@ class GameScene extends Scene {
   hurtPlayer(){
     this.hurtT = 1.1;
     Shake.add(10, 0.25);
+    SND.sfx('hurt');
     const p = this.player;
     this.hp -= 25;
     if(this.hp <= 0){
@@ -3582,9 +3881,10 @@ class CharacterSelectScene extends Scene {
   exit(){ Input.pointerHandler = null; }
 
   slotRect(i){ return { x: 96 + i*112, y: 556, w: 96, h: 84 }; }
-  move(i){ if(i === this.sel) return; this.sel = i; this.pop = 1; }
+  move(i){ if(i === this.sel) return; this.sel = i; this.pop = 1; SND.sfx('blip'); }
   confirm(){
     if(this.mgr.busy) return;
+    SND.sfx('confirm');
     Save.data.dragon = this.sel; Save.save();
     this.mgr.change(new StageSelectScene(Save.data.unlocked));
   }
@@ -3697,7 +3997,8 @@ class StageSelectScene extends Scene {
   unlocked(i){ return (i + 1) <= Save.data.unlocked; }
   launch(){
     if(this.mgr.busy) return;
-    if(!this.unlocked(this.sel)){ this.denyT = 0.4; return; }
+    if(!this.unlocked(this.sel)){ this.denyT = 0.4; SND.sfx('deny'); return; }
+    SND.sfx('confirm');
     this.mgr.change(new GameScene(this.sel + 1));
   }
 
@@ -3706,6 +4007,7 @@ class StageSelectScene extends Scene {
     if(this.denyT > 0) this.denyT -= dt;
     if(this.mgr.busy) return;
     const c = this.sel % SEL.cols, r = (this.sel / SEL.cols) | 0;
+    if(Input.pressed('left') || Input.pressed('right') || Input.pressed('up') || Input.pressed('down')) SND.sfx('blip');
     if(Input.pressed('left'))  this.sel = r*SEL.cols + (c + SEL.cols - 1) % SEL.cols;
     if(Input.pressed('right')) this.sel = r*SEL.cols + (c + 1) % SEL.cols;
     if(Input.pressed('up'))    this.sel = ((r + SEL.rows - 1) % SEL.rows)*SEL.cols + c;
@@ -3834,6 +4136,7 @@ function frame(now){
 
   const t0 = performance.now();
   Input.pollPad();
+  SND.update();                          // BGM 스텝 스케줄링
   if(Input.pressed('debug')) DEBUG = !DEBUG;
 
   acc += dt;
