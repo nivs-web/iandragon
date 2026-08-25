@@ -42,10 +42,16 @@
 'use strict';
 /* ==================================================================
    DRAGON STRIKER  -  횡스크롤 도트 슈팅 (좌 -> 우 진행)
-   - Canvas 1280x720 고정 + 레터박스 반응형
-   - 고정 타임스텝(60FPS) 루프 + deltaTime
-   - Scene Manager (페이드 전환)
-   - Phase 1: 기본 뼈대 / Phase 2: 노바트 스프라이트 + 이동
+   Canvas 1280x720 / 고정 타임스텝 60FPS / 단일 HTML 파일 / 외부 리소스 없음
+
+   씬   : 타이틀 -> 옵션 / 캐릭터선택 -> 스테이지선택 -> 게임(+일시정지/결과)
+   그래픽: 문자 그리드 도트 스프라이트 + fillRect. 드래곤 10종은 팔레트로 구분,
+           불 레벨 1~10 에 따라 형태/크기/파츠가 성장
+   전투 : 파이어 블레스(레벨별 두께/관통) / 탄도미사일(선회 후 돌진, 콤보 3-6-9)
+           / 필살기 드래곤 뢰(5단계 핵 연출)
+   적   : 날개좀비 / 드래곤라이더 / 헤비라이더 / 중간보스 / 최종보스(5패턴)
+   무대 : 20 스테이지 4층 패럴랙스 + 날씨(비/눈/낙엽/번개/별)
+   사운드: Web Audio 전량 합성 (BGM 3곡 시퀀서 + 효과음 16종)
    ================================================================== */
 
 const GAME_W = 1280, GAME_H = 720;
@@ -484,6 +490,19 @@ const Input = {
     BracketRight:'lvup', BracketLeft:'lvdown', KeyM:'mute'
   },
   _pad:{ confirm:false, back:false, missile:false, bomb:false },
+  padName: null, _padRef: null,
+  /* 게임패드 진동 (지원하지 않는 패드에서는 조용히 무시) */
+  rumble(strong, weak, ms){
+    const p = this._padRef;
+    if(!p) return;
+    try{
+      if(p.vibrationActuator && p.vibrationActuator.playEffect)
+        p.vibrationActuator.playEffect('dual-rumble',
+          { startDelay:0, duration:ms|0, strongMagnitude:strong, weakMagnitude:weak });
+      else if(p.hapticActuators && p.hapticActuators[0] && p.hapticActuators[0].pulse)
+        p.hapticActuators[0].pulse(strong, ms|0);
+    }catch(e){}
+  },
   padAxis:{ x:0, y:0 },        // 게임패드 왼쪽 스틱
   taps: 0,                     // 이번 프레임 탭 횟수 (타이틀용)
   pointerHandler: null,        // 씬이 등록하는 포인터 핸들러 {down,move,up}
@@ -532,6 +551,8 @@ const Input = {
     if(!pads) return;
     for(let i=0;i<pads.length;i++){
       const p = pads[i]; if(!p) continue;
+      this._padRef = p;
+      if(!this.padName) this.padName = (p.id || 'GAMEPAD').slice(0, 22).toUpperCase();
       const b = n => !!(p.buttons[n] && p.buttons[n].pressed);
       const conf = b(0) || b(9), back = b(1) || b(8);
       const msl = b(4), bmb = b(5);                    // LB / RB
@@ -554,6 +575,7 @@ const Input = {
       return;
     }
     this._pad.confirm = this._pad.back = false;
+    this._padRef = null; this.padName = null;
     this.padAxis.x = this.padAxis.y = 0;
   },
   /* 키보드 + 게임패드 이동 벡터 (대각선 정규화) */
@@ -1164,7 +1186,7 @@ class Player {
 /* ---------------- 저장 (localStorage. file:// 에서 막혀도 안전하게) ---------------- */
 const Save = {
   KEY: 'dragonstriker.save.v1',
-  data: { unlocked: 1, level: 1, dragon: 0, bgm: 0, best: {} },
+  data: { unlocked: 1, level: 1, dragon: 0, bgm: 0, best: {}, opt: null },
   load(){
     try{
       const j = localStorage.getItem(this.KEY);
@@ -1177,7 +1199,7 @@ const Save = {
     if(!this.data.best) this.data.best = {};
   },
   save(){ try{ localStorage.setItem(this.KEY, JSON.stringify(this.data)); }catch(e){} },
-  clearAll(){ this.data = { unlocked:1, level:1, dragon:0, bgm:0, best:{} }; this.save(); }
+  clearAll(){ this.data = { unlocked:1, level:1, dragon:0, bgm:0, best:{}, opt:null }; this.save(); }
 };
 
 /* ---------------- 스테이지 정의 ----------------
@@ -2788,7 +2810,8 @@ class TouchButton {
   update(dt){ if(this.flash > 0) this.flash -= dt; }
   render(ctx, count){
     const pressed = this.pid !== null, usable = count > 0;
-    ctx.globalAlpha = usable ? (pressed ? 0.9 : 0.6) : 0.24;
+    const A = this.alpha === undefined ? 0.5 : this.alpha;
+    ctx.globalAlpha = usable ? (pressed ? Math.min(1, A + 0.35) : A + 0.1) : A * 0.42;
     fillPixelCircle(ctx, this.x, this.y, this.r, pressed ? this.color : '#141c2c');
     drawPixelRing(ctx, this.x, this.y, this.r,        PX*3, this.color);   // 두꺼운 테두리
     drawPixelRing(ctx, this.x, this.y, this.r - PX*4, PX,   mixHex(this.color, '#000000', 0.45));
@@ -2816,8 +2839,15 @@ class VirtualStick {
   }
   down(id, x, y){
     if(this.active) return false;
-    // 스틱 주변 넓은 영역을 터치하면 잡히도록 (모바일 조작 편의)
-    if(Math.hypot(x - this.cfg.x, y - this.cfg.y) > this.cfg.radius * 2.0) return false;
+    if(this.cfg.float){
+      // 화면 좌측 절반 어디를 눌러도 그 자리에 스틱이 생긴다
+      if(x > GAME_W*0.55) return false;
+      this.cfg.x = snap(clamp(x, 130, GAME_W*0.5));
+      this.cfg.y = snap(clamp(y, 200, GAME_H - 120));
+    }else{
+      // 스틱 주변 넓은 영역을 터치하면 잡히도록 (모바일 조작 편의)
+      if(Math.hypot(x - this.cfg.x, y - this.cfg.y) > this.cfg.radius * 2.0) return false;
+    }
     this.active = true; this.pid = id;
     this.move(id, x, y);
     return true;
@@ -2841,6 +2871,7 @@ class VirtualStick {
   }
   render(ctx){
     const { x, y, radius, knob, alpha } = this.cfg;
+    if(this.cfg.float && !this.active) return;      // 플로팅 모드는 누를 때만 보임
     ctx.globalAlpha = this.active ? alpha + 0.22 : alpha;
     drawPixelRing(ctx, x, y, radius, PX*2, '#e6dcff');
     drawPixelRing(ctx, x, y, radius - PX*3, PX, '#7a6aa8');
@@ -2953,6 +2984,8 @@ class TitleScene extends Scene {
       if(s.y > 460 || s.x > GAME_W + 40){ this.shoot = null; this.shootT = 4 + Math.random()*6; }
     }
 
+    if(!this.mgr.busy && Input.pressed('down')){ SND.sfx('confirm'); this.mgr.change(new OptionsScene()); return; }
+    if(!this.mgr.busy && Input.pressed('missile')) toggleFullscreen();
     // BGM 3곡 미리듣기 : 좌우로 즉시 전환 (스펙 7.1)
     if(Input.pressed('left') || Input.pressed('right')){
       this.bgmSel = (this.bgmSel + (Input.pressed('right') ? 1 : BGM_TRACKS.length - 1)) % BGM_TRACKS.length;
@@ -3064,7 +3097,7 @@ class TitleScene extends Scene {
     const tr = BGM_TRACKS[this.bgmSel | 0];
     drawText(ctx, '< BGM ' + (this.bgmSel+1) + '  ' + tr.name + ' >', 640, 596, 3,
       { align:'center', color:PAL.gold, outline:PAL.outline, shadow:'#000' });
-    drawText(ctx, 'LEFT / RIGHT TO PREVIEW      M: MUTE', 640, 624, 2,
+    drawText(ctx, 'LEFT / RIGHT: BGM PREVIEW      DOWN: OPTIONS      Q: FULLSCREEN', 640, 624, 2,
       { align:'center', color:PAL.dim });
     drawText(ctx, 'MOVE: WASD / ARROWS   MISSILE: Q   BOMB: E   PAUSE: ESC', 640, 672, 2,
       { align:'center', color:PAL.dim });
@@ -3119,11 +3152,19 @@ class GameScene extends Scene {
     this.camLead = 0;      // 진행 방향으로 월드를 미는 카메라 리드
 
     this.player = new Player(320, GAME_H/2, Save.data.level);
-    this.stick  = new VirtualStick(STICK_CFG);
-    this.btnMsl  = new TouchButton(1078, 600, 68, ICON_MISSILE, 4, '#8fd0ff');
-    this.btnBomb = new TouchButton(1212, 496, 62, ICON_BOMB,    4, PAL.gold);
+    const o = optGet();
+    this.stick  = new VirtualStick(makeStickCfg());
+    // 버튼 크기가 커져도 화면 밖으로 나가지 않도록 오른쪽/아래 기준으로 배치
+    const br = BTN_R[clamp(o.btnSize,0,2)], br2 = Math.round(br*0.92);
+    const my = GAME_H - br - 52;
+    this.btnMsl  = new TouchButton(GAME_W - br - 140, my, br, ICON_MISSILE, 4, '#8fd0ff');
+    this.btnBomb = new TouchButton(GAME_W - br2 - 24, my - br - 40, br2, ICON_BOMB, 4, PAL.gold);
+    this.btnMsl.alpha = this.btnBomb.alpha = o.btnAlpha;
+    applyAudioOpt();
     Input.pointerHandler = {
       down:(id,x,y) => {
+        // 우상단 전체화면 버튼
+        if(x >= GAME_W-58 && y <= 44){ toggleFullscreen(); return; }
         // 상단 시간 게이지를 누르면 일시정지 (스펙 6.1)
         if(this.state === 'play' &&
            x >= TIME_BAR.x - 10 && x <= TIME_BAR.x + TIME_BAR.w + 10 &&
@@ -3202,6 +3243,7 @@ class GameScene extends Scene {
     this.waves.push(new Shockwave(b.x, b.y, big ? 1400 : 900, big ? 0.7 : 0.5));
     Popups.add(b.x, b.y - 80, b.score, PAL.fire[0], 7);
     SND.sfx('boomL');
+    Input.rumble(1.0, 0.9, 700);
   }
 
   /* 적이 "격파"되었을 때만 호출 (화면 밖 소멸은 제외) */
@@ -3355,6 +3397,7 @@ class GameScene extends Scene {
       Shake.add(9, 0.18);
       Flash.add('#ffe9c0', 0.08, 0.22);
       SND.sfx('missile');
+      Input.rumble(0.35, 0.25, 120);
       this.btnMsl.flash = 0.2;
     }
 
@@ -3364,6 +3407,7 @@ class GameScene extends Scene {
       this.roars.push(new DragonRoar(this));
       this.btnBomb.flash = 0.3;
       SND.sfx('nuke');
+      Input.rumble(1.0, 1.0, 1200);
     }
 
     // ---- 웨이브 / 아이템 스폰 ----
@@ -3514,6 +3558,7 @@ class GameScene extends Scene {
     this.hurtT = 1.1;
     Shake.add(10, 0.25);
     SND.sfx('hurt');
+    Input.rumble(0.9, 0.7, 260);
     const p = this.player;
     this.hp -= 25;
     if(this.hp <= 0){
@@ -3680,7 +3725,12 @@ class GameScene extends Scene {
     drawText(ctx, String(secs).padStart(2,'0'), B.x + B.w/2, B.y + 5, 3,
       { align:'center', color: urgent ? '#ffffff' : PAL.outline, outline: urgent ? '#c81f2e' : null });
 
-    drawText(ctx, 'Q: MISSILE   E: BOMB   [ ]: LEVEL   ESC: PAUSE', 640, 700, 2,
+    // 우상단 전체화면 아이콘
+    ctx.globalAlpha = 0.5; ctx.fillStyle = '#dff0ff';
+    for(const [dx,dy] of [[0,0],[1,0],[0,1]]) ctx.fillRect(GAME_W-46+dx*22, 10+dy*22, 12, 4);
+    for(const [dx,dy] of [[0,0],[1,0],[0,1]]) ctx.fillRect(GAME_W-46+dx*22, 10+dy*22, 4, 12);
+    ctx.globalAlpha = 1;
+    drawText(ctx, 'Q: MISSILE   E: BOMB   ESC: PAUSE', 640, 700, 2,
       { align:'center', color:'#cfe6ff', shadow:'#0a1830' });
 
     if(this.state === 'pause') this.renderPause(ctx);
@@ -3840,6 +3890,170 @@ const DRAGONS = [
 ];
 
 function currentDragon(){ return DRAGONS[clamp(Save.data.dragon | 0, 0, DRAGONS.length - 1)]; }
+
+/* ==================================================================
+   Phase 10 : 컨트롤러 설정 / 전체화면 / 게임패드
+   ================================================================== */
+const OPT_DEFAULT = {
+  stickSize:1, stickAlpha:0.42, stickFloat:0,     // 0=좌하단 고정, 1=터치한 곳에 생성
+  btnSize:1,   btnAlpha:0.5,
+  bgmOn:1, sfxOn:1
+};
+const STICK_R = [62, 78, 96], BTN_R = [54, 68, 82];
+
+function optGet(){
+  // 매번 새 객체를 만들면 참조가 끊기고 프레임마다 할당이 생기므로 1회만 정규화한다
+  const o = Save.data.opt;
+  if(!o || o._v !== 1)
+    Save.data.opt = Object.assign({ _v:1 }, OPT_DEFAULT, o || {});
+  return Save.data.opt;
+}
+/* 설정을 실제 컨트롤에 반영 */
+function makeStickCfg(){
+  const o = optGet(), r = STICK_R[clamp(o.stickSize,0,2)];
+  return { x:158, y:GAME_H-158, radius:r, knob:Math.round(r*0.38),
+           alpha:o.stickAlpha, dead:0.16, float:!!o.stickFloat };
+}
+function applyAudioOpt(){
+  const o = optGet();
+  SND.setBgmOn(!!o.bgmOn); SND.setSfxOn(!!o.sfxOn);
+}
+
+/* 전체화면 */
+function toggleFullscreen(){
+  try{
+    const el = document.documentElement;
+    if(!document.fullscreenElement){
+      (el.requestFullscreen || el.webkitRequestFullscreen || function(){}).call(el);
+    }else{
+      (document.exitFullscreen || document.webkitExitFullscreen || function(){}).call(document);
+    }
+  }catch(e){}
+}
+
+/* ==================================================================
+   OptionsScene
+   ================================================================== */
+class OptionsScene extends Scene {
+  enter(){
+    this.t = 0; this.sel = 0; this.confirmReset = 0;
+    this.bg = buildSky([{p:0,c:'#0a0818'},{p:.5,c:'#161030'},{p:1,c:'#2c1a44'}]);
+    optGet();
+    // 미리보기용 컨트롤
+    this.rebuildPreview();
+    Input.pointerHandler = {
+      down:(id,x,y) => {
+        for(let i=0;i<this.rows.length;i++){
+          const y0 = this.rowY(i);
+          if(y >= y0 - 8 && y <= y0 + 30 && x < 720){
+            if(this.sel === i) this.act(1); else { this.sel = i; SND.sfx('blip'); }
+            return;
+          }
+        }
+      }
+    };
+  }
+  exit(){ Input.pointerHandler = null; Save.save(); }
+
+  rebuildPreview(){
+    this.pStick = new VirtualStick(makeStickCfg());
+    const o = optGet(), r = BTN_R[clamp(o.btnSize,0,2)];
+    this.pMsl  = new TouchButton(880,  520, r, ICON_MISSILE, 4, '#8fd0ff');
+    this.pBomb = new TouchButton(1080, 440, r, ICON_BOMB,    4, PAL.gold);
+    this.pAlpha = o.btnAlpha;
+  }
+
+  get rows(){
+    const o = optGet();
+    const pct = v => Math.round(v*100) + '%';
+    return [
+      { k:'STICK SIZE',    v:['SMALL','MEDIUM','LARGE'][o.stickSize],  set:d=>{ o.stickSize = clamp(o.stickSize+d,0,2); } },
+      { k:'STICK OPACITY', v:pct(o.stickAlpha),  set:d=>{ o.stickAlpha = clamp(+(o.stickAlpha + d*0.1).toFixed(2), 0.2, 0.8); } },
+      { k:'STICK MODE',    v:o.stickFloat ? 'FLOATING' : 'FIXED',      set:d=>{ o.stickFloat = o.stickFloat ? 0 : 1; } },
+      { k:'BUTTON SIZE',   v:['SMALL','MEDIUM','LARGE'][o.btnSize],    set:d=>{ o.btnSize = clamp(o.btnSize+d,0,2); } },
+      { k:'BUTTON OPACITY',v:pct(o.btnAlpha),    set:d=>{ o.btnAlpha = clamp(+(o.btnAlpha + d*0.1).toFixed(2), 0.2, 0.8); } },
+      { k:'BGM',           v:o.bgmOn ? 'ON' : 'OFF',                   set:d=>{ o.bgmOn = o.bgmOn?0:1; applyAudioOpt(); } },
+      { k:'SOUND EFFECT',  v:o.sfxOn ? 'ON' : 'OFF',                   set:d=>{ o.sfxOn = o.sfxOn?0:1; applyAudioOpt(); } },
+      { k:'BGM TRACK',     v:(Save.data.bgm+1) + '  ' + BGM_TRACKS[Save.data.bgm].name,
+        set:d=>{ Save.data.bgm = (Save.data.bgm + d + BGM_TRACKS.length) % BGM_TRACKS.length;
+                 SND.resume(); SND.switchBgm(Save.data.bgm); } },
+      { k:'FULLSCREEN',    v:'PRESS ENTER', act:()=>{ toggleFullscreen(); } },
+      { k:'GAMEPAD',       v:Input.padName || 'NOT CONNECTED' },
+      { k:'RESET PROGRESS',v:this.confirmReset > 0 ? 'ENTER AGAIN' : 'PRESS ENTER',
+        act:()=>{ if(this.confirmReset > 0){ Save.clearAll(); this.confirmReset = 0; SND.sfx('deny'); }
+                  else this.confirmReset = 3; } },
+      { k:'BACK',          v:'',  act:()=>{ this.mgr.change(new TitleScene()); } }
+    ];
+  }
+  rowY(i){ return 132 + i*40; }
+
+  act(fromTap){
+    const r = this.rows[this.sel];
+    if(r.act){ r.act(); SND.sfx('confirm'); }
+    else if(r.set && fromTap){ r.set(1); this.rebuildPreview(); SND.sfx('blip'); }
+  }
+
+  update(dt){
+    this.t += dt;
+    if(this.confirmReset > 0) this.confirmReset -= dt;
+    if(this.mgr.busy) return;
+    const rows = this.rows;
+    if(Input.pressed('up')){   this.sel = (this.sel + rows.length - 1) % rows.length; SND.sfx('blip'); }
+    if(Input.pressed('down')){ this.sel = (this.sel + 1) % rows.length; SND.sfx('blip'); }
+    const r = rows[this.sel];
+    if(r.set){
+      if(Input.pressed('left')){  r.set(-1); this.rebuildPreview(); SND.sfx('blip'); }
+      if(Input.pressed('right')){ r.set( 1); this.rebuildPreview(); SND.sfx('blip'); }
+    }
+    if(Input.pressed('confirm')) this.act(0);
+    if(Input.pressed('back') || Input.pressed('pause')) this.mgr.change(new TitleScene());
+  }
+
+  render(ctx){
+    ctx.drawImage(this.bg, 0, 0);
+    drawText(ctx, 'OPTIONS', 640, 40, 7,
+      { align:'center', color:(r)=>PAL.fire[r], outline:PAL.outline, shadow:'#000', shadowOff:8 });
+
+    const rows = this.rows;
+    for(let i=0;i<rows.length;i++){
+      const y = this.rowY(i), on = i === this.sel;
+      if(on){
+        ctx.fillStyle = 'rgba(255,210,74,.14)'; ctx.fillRect(48, y - 8, 660, 34);
+        drawText(ctx, '>', 56, y, 4, { color:PAL.gold, outline:PAL.outline });
+      }
+      drawText(ctx, rows[i].k, 92, y, 3, { color: on ? PAL.white : '#7f8bb0' });
+      if(rows[i].v)
+        drawText(ctx, rows[i].v, 700, y, 3,
+          { align:'right', color: on ? PAL.gold : '#5f6a8c' });
+      if(on && rows[i].set){
+        drawText(ctx, '<', 716, y, 3, { color:PAL.gold });
+      }
+    }
+
+    // ---- 미리보기 ----
+    ctx.fillStyle = 'rgba(10,8,22,.55)'; ctx.fillRect(760, 120, 496, 480);
+    ctx.fillStyle = PAL.outline; ctx.fillRect(760, 120, 496, PX);
+    drawText(ctx, 'PREVIEW', 1008, 132, 3, { align:'center', color:'#8a7bb8' });
+    const o = optGet();
+    // 스틱 (설정한 크기/투명도로)
+    const sc = makeStickCfg();
+    this.pStick.cfg = Object.assign({}, sc, { x:900, y:430 });
+    this.pStick.dx = Math.cos(this.t*1.6)*sc.radius*0.5;
+    this.pStick.dy = Math.sin(this.t*1.6)*sc.radius*0.5;
+    this.pStick.render(ctx);
+    if(o.stickFloat)
+      drawText(ctx, 'APPEARS WHERE YOU TOUCH', 900, 430 + sc.radius + 26, 2,
+        { align:'center', color:'#8a7bb8' });
+    // 버튼
+    ctx.globalAlpha = 1;
+    this.pMsl.render(ctx, 3);
+    this.pBomb.render(ctx, 2);
+
+    drawText(ctx, 'UP-DOWN: SELECT    LEFT-RIGHT: CHANGE    ENTER: OK    ESC: BACK',
+      640, 668, 2, { align:'center', color:'#8a7bb8' });
+    if(DEBUG) drawHUDDebug(ctx);
+  }
+}
 
 /* ==================================================================
    CharacterSelectScene
@@ -4116,6 +4330,7 @@ addEventListener('orientationchange', () => setTimeout(resize, 120));
 resize();
 
 Save.load();
+optGet();
 Input.init(canvas);
 
 const scenes = new SceneManager();
