@@ -491,11 +491,13 @@ function buildLogo(text, s){
 /* 픽셀 원 (달, 구슬 등) */
 function fillPixelCircle(ctx, cx, cy, r, color){
   ctx.fillStyle = color;
-  for(let y = -r; y <= r; y += PX){
+  // 큰 원은 도트 격자를 키워 그린다 (드로우 수 절감 + 오히려 더 도트다운 느낌)
+  const st = r > 150 ? PX*4 : (r > 70 ? PX*2 : PX);
+  for(let y = -r; y <= r; y += st){
     const dx = Math.sqrt(Math.max(0, r*r - y*y));
-    const w = snap(dx*2);
+    const w = Math.round(dx*2 / st) * st;
     if(w <= 0) continue;
-    ctx.fillRect(snap(cx - dx), snap(cy + y), w, PX);
+    ctx.fillRect(Math.round((cx - dx)/st)*st, Math.round((cy + y)/st)*st, w, st);
   }
 }
 
@@ -1093,45 +1095,112 @@ const Shake = {
   }
 };
 
-/* ---------------- 파티클 ---------------- */
-const MAX_PARTICLES = 520;
-const Particles = {
+/* ---------------- 히트스톱 : 타격 순간 화면을 아주 잠깐 얼려 임팩트를 만든다 ---------------- */
+const Freeze = {
+  t: 0,
+  add(sec){ this.t = Math.min(0.16, Math.max(this.t, sec)); },
+  reset(){ this.t = 0; }
+};
+
+/* ---------------- 화면 플래시 ---------------- */
+const Flash = {
+  t: 0, dur: 0, color: '#ffffff',
+  add(color, dur, strength){
+    if(this.t > 0 && this.dur >= dur) return;
+    this.color = color; this.dur = dur; this.t = dur; this.k = strength || 0.5;
+  },
+  update(dt){ if(this.t > 0) this.t -= dt; },
+  render(ctx){
+    if(this.t <= 0) return;
+    ctx.globalAlpha = (this.t / this.dur) * this.k;
+    ctx.fillStyle = this.color; ctx.fillRect(0,0,GAME_W,GAME_H);
+    ctx.globalAlpha = 1;
+  },
+  reset(){ this.t = 0; }
+};
+
+/* ---------------- 점수 팝업 ---------------- */
+const Popups = {
   list: [],
+  add(x, y, text, color, size){
+    if(this.list.length > 24) this.list.shift();
+    this.list.push({ x, y, text:String(text), color: color || PAL.gold, size: size || 3, t: 0, max: 0.85 });
+  },
+  update(dt){
+    for(let i=this.list.length-1;i>=0;i--){
+      const o = this.list[i];
+      o.t += dt; o.y -= 70*dt;
+      if(o.t >= o.max) this.list.splice(i,1);
+    }
+  },
+  render(ctx){
+    for(const o of this.list){
+      const k = o.t / o.max;
+      drawText(ctx, o.text, o.x, o.y, o.size,
+        { align:'center', color:o.color, outline:PAL.outline, alpha: k < 0.7 ? 1 : (1-k)/0.3 });
+    }
+  },
+  clear(){ this.list.length = 0; }
+};
+
+/* ---------------- 파티클 ---------------- */
+const MAX_PARTICLES = 900;
+/* 파티클은 미리 전부 할당해두고 재사용한다.
+   매 프레임 수십 개를 new/splice 하면 GC 가 몰려서 프레임이 튄다. */
+const Particles = {
+  pool: null, n: 0,
+  init(){
+    this.pool = new Array(MAX_PARTICLES);
+    for(let i=0;i<MAX_PARTICLES;i++)
+      this.pool[i] = { x:0,y:0,vx:0,vy:0,life:0,max:1,size:PX,grav:0,drag:0,pal:PAL.fire };
+  },
+  get count(){ return this.n; },
   spawn(x, y, n, opt){
+    if(!this.pool) this.init();
     opt = opt || {};
-    for(let i=0; i<n; i++){
-      if(this.list.length >= MAX_PARTICLES) return;
-      const a = (opt.ang === undefined ? Math.random()*Math.PI*2 : opt.ang + (Math.random()-0.5)*(opt.spread||1.2));
-      const sp = (opt.spd || 200) * (0.35 + Math.random()*0.9);
-      this.list.push({
-        x, y, vx: Math.cos(a)*sp, vy: Math.sin(a)*sp,
-        life: 0, max: (opt.life || 0.4) * (0.6 + Math.random()*0.8),
-        size: opt.size || (Math.random() > 0.6 ? PX*2 : PX),
-        grav: opt.grav === undefined ? 320 : opt.grav,
-        drag: opt.drag === undefined ? 2.2 : opt.drag,
-        pal: opt.pal || PAL.fire
-      });
+    const spd  = opt.spd  || 200;
+    const life = opt.life || 0.4;
+    const grav = opt.grav === undefined ? 320 : opt.grav;
+    const drag = opt.drag === undefined ? 2.2 : opt.drag;
+    const pal  = opt.pal || PAL.fire;
+    const hasAng = opt.ang !== undefined, spread = opt.spread || 1.2;
+    for(let i=0;i<n;i++){
+      if(this.n >= MAX_PARTICLES) return;
+      const p = this.pool[this.n++];
+      const a = hasAng ? opt.ang + (Math.random()-0.5)*spread : Math.random()*Math.PI*2;
+      const v = spd * (0.35 + Math.random()*0.9);
+      p.x = x; p.y = y;
+      p.vx = Math.cos(a)*v; p.vy = Math.sin(a)*v;
+      p.life = 0; p.max = life * (0.6 + Math.random()*0.8);
+      p.size = opt.size || (Math.random() > 0.6 ? PX*2 : PX);
+      p.grav = grav; p.drag = drag; p.pal = pal;
     }
   },
   update(dt){
-    for(let i=this.list.length-1; i>=0; i--){
-      const p = this.list[i];
+    for(let i=this.n-1; i>=0; i--){
+      const p = this.pool[i];
       p.life += dt;
-      if(p.life >= p.max){ this.list.splice(i,1); continue; }
-      const d = Math.max(0, 1 - p.drag*dt);
-      p.vx *= d; p.vy *= d;
+      if(p.life >= p.max){                       // 스왑 제거 : 배열 이동 없음
+        this.n--;
+        this.pool[i] = this.pool[this.n];
+        this.pool[this.n] = p;
+        continue;
+      }
+      const d = 1 - p.drag*dt;
+      p.vx *= d > 0 ? d : 0; p.vy *= d > 0 ? d : 0;
       p.vy += p.grav*dt;
       p.x += p.vx*dt; p.y += p.vy*dt;
     }
   },
   render(ctx){
-    for(const p of this.list){
+    for(let i=0;i<this.n;i++){
+      const p = this.pool[i];
       const k = p.life / p.max;
-      ctx.fillStyle = p.pal[Math.min(p.pal.length-1, Math.floor(k * p.pal.length))];
+      ctx.fillStyle = p.pal[(k * p.pal.length)|0] || p.pal[p.pal.length-1];
       ctx.fillRect(snap(p.x), snap(p.y), p.size, p.size);
     }
   },
-  clear(){ this.list.length = 0; }
+  clear(){ this.n = 0; }
 };
 
 /* ---------------- 폭발 (8프레임 도트 애니메이션) ---------------- */
@@ -1146,35 +1215,47 @@ class Boom {
     const f = Math.min(BOOM_FRAMES-1, Math.floor(this.t/this.dur * BOOM_FRAMES));
     const k = f / (BOOM_FRAMES-1);
     const r = this.r * (0.35 + k*0.95);
-    // 바깥 링 -> 안쪽 코어 (프레임이 갈수록 색이 식음)
     const ci = Math.min(6, Math.floor(k*6) + 1);
-    if(k < 0.75){
-      ctx.globalAlpha = 1 - k*0.35;
-      fillPixelCircle(ctx, this.x, this.y, r, PAL.fire[Math.min(6, ci+2)]);
-      fillPixelCircle(ctx, this.x, this.y, r*0.66, PAL.fire[ci]);
-      if(k < 0.45) fillPixelCircle(ctx, this.x, this.y, r*0.33, PAL.fire[0]);
-    }else{
-      ctx.globalAlpha = (1 - k) / 0.25;
-      drawPixelRing(ctx, this.x, this.y, r, PX*2, PAL.fire[6]);
+    // 1) 터지는 순간 흰 코어
+    if(k < 0.2){
+      ctx.globalAlpha = 1;
+      fillPixelCircle(ctx, this.x, this.y, r*1.15, '#ffffff');
+    }
+    // 2) 화염 덩어리 (겉 -> 속)
+    if(k < 0.8){
+      ctx.globalAlpha = 1 - k*0.3;
+      fillPixelCircle(ctx, this.x, this.y, r,       PAL.fire[Math.min(6, ci+2)]);
+      fillPixelCircle(ctx, this.x, this.y, r*0.66,  PAL.fire[ci]);
+      if(k < 0.5) fillPixelCircle(ctx, this.x, this.y, r*0.33, PAL.fire[0]);
+    }
+    // 3) 바깥으로 빠르게 퍼지는 충격 링
+    if(k > 0.05){
+      ctx.globalAlpha = Math.max(0, 1 - k) * 0.9;
+      drawPixelRing(ctx, this.x, this.y, this.r * (0.5 + k*1.9), PX*2, PAL.fire[1]);
+    }
+    // 4) 식으면서 남는 연기
+    if(k > 0.55){
+      ctx.globalAlpha = (1 - k) * 0.55;
+      fillPixelCircle(ctx, this.x, this.y - r*0.25, r*0.8, '#4a4048');
     }
     ctx.globalAlpha = 1;
   }
 }
 
 /* ---------------- 파이어 블레스 (자동 연사) ---------------- */
-const FIRE_INTERVAL = 0.08;                  // 초당 12.5발
+const FIRE_INTERVAL = 0.06;                  // 초당 16.7발 (더 촘촘하게)
 /* 레벨별 : n=갈래수 th=두께 dmg=데미지 spd=속도 pierce=관통수 len=길이 spread=확산(px/s) */
 const FIRE = [ null,
-  { n:1, th:16, dmg: 18, spd:1080, pierce:0,  len: 80, spread: 0  },  // Lv1  기본부터 두툼한 불줄기
-  { n:1, th:19, dmg: 22, spd:1080, pierce:0,  len: 86, spread: 0  },  // Lv2
-  { n:2, th:22, dmg: 20, spd:1100, pierce:0,  len: 92, spread:36  },  // Lv3  2줄로 갈라짐
-  { n:2, th:25, dmg: 24, spd:1100, pierce:0,  len: 98, spread:42  },  // Lv4
-  { n:3, th:30, dmg: 30, spd:1120, pierce:1,  len:106, spread:60  },  // Lv5  굵은 1줄 + 확산
-  { n:3, th:34, dmg: 34, spd:1120, pierce:1,  len:114, spread:66  },  // Lv6
-  { n:1, th:42, dmg:110, spd:1180, pierce:3,  len:132, spread: 0  },  // Lv7  화염 기둥 (관통)
-  { n:1, th:50, dmg:128, spd:1180, pierce:4,  len:148, spread: 0  },  // Lv8
-  { n:1, th:60, dmg:150, spd:1220, pierce:6,  len:168, spread: 0  },  // Lv9
-  { n:1, th:78, dmg:190, spd:1280, pierce:99, len:210, spread: 0  }   // Lv10 거대 화염포
+  { n:1, th: 26, dmg: 22, spd:1500, pierce:0,  len:100, spread: 0  },  // Lv1  기본부터 굵고 빠르게
+  { n:1, th: 30, dmg: 27, spd:1500, pierce:0,  len:108, spread: 0  },  // Lv2
+  { n:2, th: 34, dmg: 25, spd:1520, pierce:0,  len:116, spread:40  },  // Lv3  2줄로 갈라짐
+  { n:2, th: 38, dmg: 30, spd:1520, pierce:0,  len:124, spread:46  },  // Lv4
+  { n:3, th: 46, dmg: 36, spd:1560, pierce:1,  len:134, spread:64  },  // Lv5  굵은 1줄 + 확산
+  { n:3, th: 52, dmg: 42, spd:1560, pierce:1,  len:144, spread:70  },  // Lv6
+  { n:1, th: 64, dmg:140, spd:1620, pierce:3,  len:168, spread: 0  },  // Lv7  화염 기둥 (관통)
+  { n:1, th: 76, dmg:165, spd:1620, pierce:4,  len:186, spread: 0  },  // Lv8
+  { n:1, th: 90, dmg:195, spd:1700, pierce:6,  len:210, spread: 0  },  // Lv9
+  { n:1, th:116, dmg:250, spd:1800, pierce:99, len:264, spread: 0  }   // Lv10 거대 화염포
 ];
 
 class FireBolt {
@@ -1199,16 +1280,20 @@ class FireBolt {
     const x0 = snap(this.x - L);
     for(let sx=0; sx<L; sx+=seg){
       const t = sx / L;                                        // 0=꼬리, 1=머리
-      // 앞쪽이 두껍고 꼬리로 갈수록 가늘어지는 불꽃 프로파일 + 일렁임
-      const wob = 1 + Math.sin(this.t*26 + this.ph + t*6) * 0.10;
-      const prof = Math.sin(Math.PI * (0.18 + t*0.82)) * wob;
+      // 앞머리로 갈수록 두꺼워지고 맨 끝만 둥글게 마무리 + 일렁임
+      const wob  = 1 + Math.sin(this.t*26 + this.ph + t*6) * 0.10;
+      const head = Math.min(1, (1 - t) / 0.10);                // 맨 앞 10%% 만 살짝 둥글게
+      const prof = (0.34 + 0.66*t) * (0.55 + 0.45*head) * wob;
       const h  = Math.max(PX, snap(T*prof));
       const gx = x0 + sx, gy = snap(this.y);
-      ctx.fillStyle = PAL.fire[5]; ctx.fillRect(gx, gy - h/2, seg, h);
-      const h2 = Math.max(PX, snap(h*0.62));
+      ctx.fillStyle = PAL.fire[6]; ctx.fillRect(gx, gy - h/2 - PX, seg, h + PX*2);  // 겉불 테두리
+      ctx.fillStyle = PAL.fire[4]; ctx.fillRect(gx, gy - h/2, seg, h);
+      const h2 = Math.max(PX, snap(h*0.70));
       ctx.fillStyle = PAL.fire[2]; ctx.fillRect(gx, gy - h2/2, seg, h2);
-      const h3 = Math.max(PX, snap(h*0.30));
-      ctx.fillStyle = PAL.fire[0]; ctx.fillRect(gx, gy - h3/2, seg, h3);
+      const h3 = Math.max(PX, snap(h*0.42));
+      ctx.fillStyle = PAL.fire[1]; ctx.fillRect(gx, gy - h3/2, seg, h3);
+      const h4 = Math.max(PX, snap(h*0.20));
+      ctx.fillStyle = '#ffffff';   ctx.fillRect(gx, gy - h4/2, seg, h4);            // 흰 코어
     }
   }
 }
@@ -1273,7 +1358,7 @@ class Arrow {
 class WingZombie {
   constructor(x, y, speed){
     this.x = x; this.y = y;
-    this.hp = 18; this.maxHp = 18;      // 불 1발
+    this.hp = 22; this.maxHp = 22;      // 불 1발
     this.vx = -(speed || 175); this.vy = 0;
     this.t = Math.random()*6;
     this.baseY = y;
@@ -1307,18 +1392,21 @@ class WingZombie {
     this.hp -= dmg;
     this.flash = 0.09;
     this.knock = 260;
-    Shake.add(3, 0.05);
-    Particles.spawn(this.x - 10, this.y, 5, { ang:-0.2, spread:2.4, spd:260, life:0.30 });
+    Shake.add(4, 0.05);
+    Particles.spawn(this.x - 12, this.y, 8, { ang:-0.15, spread:2.6, spd:380, life:0.32 });
     if(this.hp <= 0) this.die(scene);
   }
   die(scene){
     this.dead = true; this.killed = true;
     scene.score += this.score;
-    scene.booms.push(new Boom(this.x, this.y, 46, 0.34));
-    Particles.spawn(this.x, this.y, 14, { spd:320, life:0.5 });
-    // 뼈다귀 튀김
-    Particles.spawn(this.x, this.y, 6, { spd:280, life:0.7, grav:700, pal:['#e8e0c8','#cfc6a8','#9a9078'] });
-    Shake.add(5, 0.09);
+    scene.booms.push(new Boom(this.x, this.y, 62, 0.36));
+    scene.waves.push(new Shockwave(this.x, this.y, 150, 0.26));
+    Particles.spawn(this.x, this.y, 26, { spd:460, life:0.55 });
+    Particles.spawn(this.x, this.y, 8, { spd:340, life:0.8, grav:760, size:PX*2,
+      pal:['#e8e0c8','#cfc6a8','#9a9078'] });                       // 뼈다귀 파편
+    Popups.add(this.x, this.y - 30, this.score, PAL.fire[1], 3);
+    Shake.add(7, 0.11);
+    Freeze.add(0.028);
   }
   render(ctx){
     const ox = snap(this.x - Z_W/2), oy = snap(this.y - Z_H/2);
@@ -1504,9 +1592,13 @@ class Bomb {                            // 헤비 라이더의 투하 폭탄
   }
 }
 
-class Shockwave {                       // 보스 분노 시 전체 화면 충격파
-  constructor(x, y){ this.x = x; this.y = y; this.t = 0; this.dur = 1.1; this.dead = false; this.hitDone = false; }
-  get r(){ return 60 + (this.t/this.dur) * 1500; }
+class Shockwave {                       // 충격파 링 (보스 분노 / 미사일 폭발 등)
+  constructor(x, y, reach, dur, harmless){
+    this.x = x; this.y = y; this.t = 0;
+    this.dur = dur || 1.1; this.reach = reach || 1500;
+    this.dead = false; this.hitDone = !!harmless || (reach !== undefined);
+  }
+  get r(){ return 60 + (this.t/this.dur) * this.reach; }
   update(dt){ this.t += dt; if(this.t >= this.dur) this.dead = true; }
   render(ctx){
     const k = this.t/this.dur;
@@ -1536,8 +1628,9 @@ class EnemyBase {
     this.hp -= dmg;
     this.flash = 0.09;
     this.knock = this.isBoss ? 60 : 220;
-    Shake.add(this.isBoss ? 2 : 3, 0.05);
-    Particles.spawn(this.x - 12, this.y, this.isBoss ? 3 : 5, { ang:-0.2, spread:2.4, spd:260, life:0.3 });
+    Shake.add(this.isBoss ? 3 : 4, 0.05);
+    Particles.spawn(this.x - 14, this.y, this.isBoss ? 6 : 9,
+      { ang:-0.15, spread:2.6, spd:380, life:0.32 });
     if(this.hp <= 0) this.die(scene);
   }
   die(scene){
@@ -1550,7 +1643,7 @@ class EnemyBase {
 const DR_CELL = 3.6;                                 // FORM A x3.6 = 108 x 101 (+20%)
 class DragonRider extends EnemyBase {
   constructor(x, y){
-    super(x, y, 54, 300);        // 불 3발
+    super(x, y, 66, 300);        // 불 3발
     this.vx = -(150 + Math.random()*50);
     this.shootT = 1.0 + Math.random()*1.4;
   }
@@ -1575,10 +1668,16 @@ class DragonRider extends EnemyBase {
   }
   die(scene){
     super.die(scene);
-    scene.booms.push(new Boom(this.x, this.y, 66, 0.42));
-    Particles.spawn(this.x, this.y, 20, { spd:360, life:0.55 });
-    Particles.spawn(this.x, this.y, 8, { spd:300, life:0.7, grav:700, pal:['#e8e0c8','#cfc6a8','#9a9078'] });
-    Shake.add(7, 0.13);
+    scene.booms.push(new Boom(this.x, this.y, 104, 0.46));
+    scene.booms.push(new Boom(this.x - 34, this.y + 18, 56, 0.4));
+    scene.waves.push(new Shockwave(this.x, this.y, 260, 0.32));
+    Particles.spawn(this.x, this.y, 40, { spd:560, life:0.65 });
+    Particles.spawn(this.x, this.y, 12, { spd:420, life:0.9, grav:760, size:PX*2,
+      pal:['#ffd0c8','#c4343a','#6b1420','#2a1014'] });
+    Popups.add(this.x, this.y - 40, this.score, PAL.fire[1], 4);
+    Shake.add(11, 0.18);
+    Flash.add('#ffb070', 0.08, 0.20);
+    Freeze.add(0.05);
   }
   render(ctx){
     drawFormDragon(ctx, RED_DRAGON_PAL, 'A', DR_CELL, this.x, this.y, this.pose, true,
@@ -1590,7 +1689,7 @@ class DragonRider extends EnemyBase {
 const HV_CELL = 4.8;                                 // FORM A x4.8 = 144 x 134 (+20%)
 class HeavyRider extends EnemyBase {
   constructor(x, y){
-    super(x, y, 144, 800);       // 불 8발
+    super(x, y, 176, 800);       // 불 8발
     this.vx = -(95 + Math.random()*35);
     this.missileT = 1.6 + Math.random()*1.0;
     this.bombT    = 2.6 + Math.random()*1.2;
@@ -1621,13 +1720,20 @@ class HeavyRider extends EnemyBase {
   }
   die(scene){
     super.die(scene);
-    scene.booms.push(new Boom(this.x, this.y, 92, 0.52));
-    Particles.spawn(this.x, this.y, 30, { spd:430, life:0.65 });
-    // 파편 8방향
+    scene.booms.push(new Boom(this.x, this.y, 150, 0.58));
+    for(let i=0;i<3;i++)
+      scene.booms.push(new Boom(this.x + (Math.random()-0.5)*110, this.y + (Math.random()-0.5)*90,
+        50 + Math.random()*44, 0.42));                                  // 연쇄 폭발
+    scene.waves.push(new Shockwave(this.x, this.y, 420, 0.42));
+    Particles.spawn(this.x, this.y, 56, { spd:640, life:0.8 });
+    // 파편 8방향 (큰 덩어리)
     for(let i=0;i<8;i++)
-      Particles.spawn(this.x, this.y, 3, { ang:i*Math.PI/4, spread:0.35, spd:420, life:0.8,
-        grav:520, pal:['#efe6ff','#b48ce0','#573083'] });
-    Shake.add(10, 0.2);
+      Particles.spawn(this.x, this.y, 4, { ang:i*Math.PI/4, spread:0.35, spd:560, life:1.0,
+        grav:620, size:PX*3, pal:['#efe6ff','#b48ce0','#573083','#20102e'] });
+    Popups.add(this.x, this.y - 56, this.score, PAL.fire[0], 5);
+    Shake.add(16, 0.3);
+    Flash.add('#e0c0ff', 0.12, 0.34);
+    Freeze.add(0.075);
   }
   render(ctx){
     drawFormDragon(ctx, PURPLE_DRAGON_PAL, 'A', HV_CELL, this.x, this.y, this.pose, true,
@@ -1911,60 +2017,89 @@ class Director {
    ================================================================== */
 
 /* 미사일 데미지는 "중간보스 HP의 25%" 로 정의 (스펙 3.3) */
-function midBossHpOf(stage){ return 2200 + (stage-1)*620; }
-function bossHpOf(stage){    return 3200 + (stage-1)*900; }
+function midBossHpOf(stage){ return 3600 + (stage-1)*1000; }
+function bossHpOf(stage){    return 5200 + (stage-1)*1450; }
 function missileDamageOf(stage){ return midBossHpOf(stage) * 0.25; }
 
 const MISSILE = {
-  SPEED: 300,        // 초당 300px
-  TURN: 2.6,         // 회전율 (부드럽게)
-  BLAST: 60,         // 폭발 반경 (데미지)
-  BLAST_FX: 112,     // 폭발 연출 크기
+  LOOP_TIME: 0.52,   // 발사 직후 크게 한 바퀴 도는 시간
+  LOOP_SPD: 560,     // 선회 중 속도
+  LOOP_OMEGA: 12.6,  // 선회 각속도 (2pi / LOOP_TIME) -> 정확히 한 바퀴
+  CHASE_SPD: 980,    // 선회를 마치고 적에게 돌진하는 속도
+  ACCEL: 2600,
+  TURN: 7.0,         // 돌진 중 회전율 (공격적으로 물고 늘어짐)
+  BLAST: 96,         // 폭발 반경 (데미지)
+  BLAST_FX: 190,     // 폭발 연출 크기
   COMBO_WINDOW: 1.2, // 이 시간 안에 다시 쓰면 발수 증가 (3 -> 6 -> 9)
   MAX_COMBO: 3
 };
 
 class PlayerMissile {
-  constructor(x, y, target, dmg, delay){
+  constructor(x, y, target, dmg, delay, dir){
     this.x = x; this.y = y;
-    this.ang = -Math.PI/2 + Math.random()*Math.PI;   // 위/앞쪽으로 흩뿌리며 출발
+    this.ang = -Math.PI/2 * (dir || 1);              // 위 또는 아래로 튀어나가며 선회 시작
+    this.dir = dir || 1;                             // 선회 방향 (+1 시계 / -1 반시계)
     this.target = target; this.dmg = dmg;
-    this.t = -(delay || 0); this.dead = false; this.life = 5;
-    this.spd = 0;
+    this.t = -(delay || 0); this.dead = false; this.life = 5.5;
+    this.spd = MISSILE.LOOP_SPD; this.phase = 'loop';
+    this.smokeT = 0;
   }
-  get box(){ return { x:this.x - 11, y:this.y - 9, w:22, h:18 }; }
+  get box(){ return { x:this.x - 26, y:this.y - 14, w:52, h:28 }; }
   update(dt, scene){
     this.t += dt;
     if(this.t < 0) return;                    // 발사 시차
     if(this.t > this.life){ this.explode(scene); return; }
-    this.spd = Math.min(MISSILE.SPEED, this.spd + 1400*dt);   // 부드럽게 가속
 
-    // 표적이 사라졌으면 가장 가까운 적으로 재지정
-    if(!this.target || this.target.dead) this.target = nearestEnemy(scene, this.x, this.y);
-    if(this.target){
-      const want = Math.atan2(this.target.y - this.y, this.target.x - this.x);
-      let d = want - this.ang;
-      while(d >  Math.PI) d -= Math.PI*2;
-      while(d < -Math.PI) d += Math.PI*2;
-      this.ang += clamp(d, -MISSILE.TURN*dt, MISSILE.TURN*dt);
+    if(this.phase === 'loop'){
+      // --- 크게 한 바퀴 선회 ---
+      this.ang += MISSILE.LOOP_OMEGA * this.dir * dt;
+      this.spd = MISSILE.LOOP_SPD;
+      if(this.t >= MISSILE.LOOP_TIME){
+        this.phase = 'chase';
+        Particles.spawn(this.x, this.y, 10, { spd:280, life:0.3, grav:0 });   // 선회 종료 -> 가속 순간
+      }
     }else{
-      this.ang += (0 - this.ang) * Math.min(1, 3*dt);          // 표적 없으면 정면으로
+      // --- 표적에게 돌진 ---
+      this.spd = Math.min(MISSILE.CHASE_SPD, this.spd + MISSILE.ACCEL*dt);
+      if(!this.target || this.target.dead) this.target = nearestEnemy(scene, this.x, this.y);
+      if(this.target){
+        const want = Math.atan2(this.target.y - this.y, this.target.x - this.x);
+        let d = want - this.ang;
+        while(d >  Math.PI) d -= Math.PI*2;
+        while(d < -Math.PI) d += Math.PI*2;
+        this.ang += clamp(d, -MISSILE.TURN*dt, MISSILE.TURN*dt);
+      }else{
+        let d = 0 - this.ang;
+        while(d >  Math.PI) d -= Math.PI*2;
+        while(d < -Math.PI) d += Math.PI*2;
+        this.ang += clamp(d, -MISSILE.TURN*dt, MISSILE.TURN*dt);
+      }
     }
     this.x += Math.cos(this.ang)*this.spd*dt;
     this.y += Math.sin(this.ang)*this.spd*dt;
 
-    // 꼬리 불꽃
-    Particles.spawn(this.x - Math.cos(this.ang)*12, this.y - Math.sin(this.ang)*12, 1,
-      { spd:50, life:0.34, grav:-20, drag:3.5 });
-
-    if(this.x < -80 || this.x > GAME_W + 140 || this.y < -120 || this.y > GAME_H + 120) this.dead = true;
+    // 굵은 화염 + 연기 궤적
+    const bx = this.x - Math.cos(this.ang)*26, by = this.y - Math.sin(this.ang)*26;
+    Particles.spawn(bx, by, 2, { spd:70, life:0.30, grav:-30, drag:3.2, size:PX*2 });
+    this.smokeT -= dt;
+    if(this.smokeT <= 0){
+      this.smokeT = 0.035;
+      Particles.spawn(bx, by, 1, { spd:40, life:0.55, grav:-8, drag:2.4, size:PX*2,
+        pal:['#e8e4f0','#a8a2b8','#6b6678','#3a3644'] });
+    }
+    if(this.x < -120 || this.x > GAME_W + 180 || this.y < -160 || this.y > GAME_H + 160) this.dead = true;
   }
   explode(scene){
     if(this.dead) return;
     this.dead = true;
-    scene.booms.push(new Boom(this.x, this.y, MISSILE.BLAST_FX, 0.5));
-    Particles.spawn(this.x, this.y, 26, { spd:420, life:0.6 });
-    Shake.add(8, 0.16);
+    scene.booms.push(new Boom(this.x, this.y, MISSILE.BLAST_FX, 0.55));
+    scene.waves.push(new Shockwave(this.x, this.y, 340, 0.4));
+    Particles.spawn(this.x, this.y, 40, { spd:560, life:0.7 });
+    Particles.spawn(this.x, this.y, 10, { spd:420, life:0.9, grav:640, size:PX*3,
+      pal:['#ffffff','#ffd24a','#c81f2e','#4a4048'] });
+    Shake.add(13, 0.24);
+    Flash.add('#ffd9a0', 0.10, 0.35);
+    Freeze.add(0.05);
     // 반경 내 전체 타격
     for(const e of scene.enemies){
       if(e.dead) continue;
@@ -1977,15 +2112,31 @@ class PlayerMissile {
   }
   render(ctx){
     if(this.t < 0) return;
-    const x = snap(this.x), y = snap(this.y);
-    const c = Math.cos(this.ang), s = Math.sin(this.ang);
-    ctx.fillStyle = PAL.fire[1];
-    ctx.fillRect(snap(x - c*16), snap(y - s*16), PX*2, PX*2);      // 분사 화염
-    ctx.fillStyle = PAL.fire[3];
-    ctx.fillRect(snap(x - c*22), snap(y - s*22), PX, PX);
-    ctx.fillStyle = '#e8ecf6'; ctx.fillRect(x - 10, y - PX, 20, PX*2);   // 동체
-    ctx.fillStyle = '#8b93a8'; ctx.fillRect(x - 12, y - PX*2, PX, PX*4); // 꼬리날개
-    ctx.fillStyle = '#ff4d5a'; ctx.fillRect(x + 8,  y - PX, PX*2, PX*2); // 탄두
+    // 진행 방향으로 회전시켜 그린다 (도트 유지를 위해 8방향으로 스냅)
+    const step = Math.PI/8;
+    const a = Math.round(this.ang/step)*step;
+    ctx.save();
+    ctx.translate(snap(this.x), snap(this.y));
+    ctx.rotate(a);
+    // 분사 화염 (뒤로 길게)
+    for(let i=0;i<4;i++){
+      ctx.fillStyle = PAL.fire[i];
+      const L = 26 - i*5, h = 16 - i*3;
+      ctx.fillRect(-26 - L, -h/2, L, h);
+    }
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(-34, -PX, 10, PX*2);
+    // 동체 (두툼하게)
+    ctx.fillStyle = '#0d0912'; ctx.fillRect(-28, -13, 52, 26);
+    ctx.fillStyle = '#e8ecf6'; ctx.fillRect(-26, -11, 46, 12);
+    ctx.fillStyle = '#8b93a8'; ctx.fillRect(-26,   1, 46, 10);
+    // 꼬리 날개
+    ctx.fillStyle = '#5a6072'; ctx.fillRect(-32, -20, 12, 40);
+    ctx.fillStyle = '#0d0912'; ctx.fillRect(-34, -20,  4, 40);
+    // 탄두
+    ctx.fillStyle = '#0d0912'; ctx.fillRect(20, -13, 12, 26);
+    ctx.fillStyle = '#ff4d5a'; ctx.fillRect(20, -10, 10, 20);
+    ctx.fillStyle = '#ffd0d4'; ctx.fillRect(22,  -8,  4,  6);
+    ctx.restore();
   }
 }
 
@@ -2023,8 +2174,10 @@ class DragonRoar {
     // 포효가 끝나는 순간 실제 효과 적용
     if(!this.applied && this.t >= BOMB_FX.ROAR){
       this.applied = true;
-      scene.waves.push(new Shockwave(this.px, this.py));
-      Shake.add(16, 0.7);
+      scene.waves.push(new Shockwave(this.px, this.py, 1500, 1.1, true));   // 내 필살기이므로 무해
+      Shake.add(20, 0.8);
+      Flash.add('#ffffff', 0.22, 0.8);
+      Freeze.add(0.14);
       // 화면 내 모든 적 탄환 제거
       for(const list of [scene.arrows, scene.eshots, scene.missiles, scene.bombs])
         for(const o of list) o.dead = true;
@@ -2156,17 +2309,19 @@ const ICON_PAL = {
   o:'#c81f2e',  // 화염 그늘
   L:'#fffbe0'   // 번개
 };
-/* 미사일 아이콘 (15 x 9) : 좌측 분사 화염 + 동체 + 우측 탄두 */
+/* 미사일 아이콘 (18 x 11) : 두툼한 동체 + 큰 탄두 + 굵은 분사 화염 */
 const ICON_MISSILE = [
-  '..K............',
-  '..KK...........',
-  'fFKKKKKKKKKK...',
-  'FfKwwwwwwwwwKK.',
-  'FfKwwwwwwwwwwrK',
-  'FfKssssssssssKK',
-  'fFKKKKKKKKKK...',
-  '..KK...........',
-  '..K............'
+  '...KK.............',
+  '...KKK............',
+  '.fFKKKKKKKKKKK....',
+  'fFFKwwwwwwwwwKK...',
+  'FFFKwwwwwwwwwwKrK.',
+  'FFFKwwwwwwwwwwwrrK',
+  'FFFKssssssssssKrK.',
+  'fFFKsssssssssKK...',
+  '.fFKKKKKKKKKKK....',
+  '...KKK............',
+  '...KK.............'
 ];
 /* 필살기(드래곤 뢰) 아이콘 (12 x 12) : 화염 구슬 안의 번개 */
 const ICON_BOMB = [
@@ -2200,9 +2355,10 @@ class TouchButton {
   update(dt){ if(this.flash > 0) this.flash -= dt; }
   render(ctx, count){
     const pressed = this.pid !== null, usable = count > 0;
-    ctx.globalAlpha = usable ? (pressed ? 0.8 : 0.5) : 0.2;
+    ctx.globalAlpha = usable ? (pressed ? 0.9 : 0.6) : 0.24;
     fillPixelCircle(ctx, this.x, this.y, this.r, pressed ? this.color : '#141c2c');
-    drawPixelRing(ctx, this.x, this.y, this.r, PX, this.color);
+    drawPixelRing(ctx, this.x, this.y, this.r,        PX*3, this.color);   // 두꺼운 테두리
+    drawPixelRing(ctx, this.x, this.y, this.r - PX*4, PX,   mixHex(this.color, '#000000', 0.45));
     ctx.globalAlpha = 1;
     // 사용 가능할 때만 원색, 아니면 회색 톤으로 통일
     ctx.globalAlpha = usable ? 1 : 0.35;
@@ -2271,15 +2427,16 @@ class VirtualStick {
 function drawPixelRing(ctx, cx, cy, r, thick, color){
   ctx.fillStyle = color;
   const ri = r - thick;
-  for(let y = -r; y <= r; y += PX){
+  const PXs = r > 150 ? PX*4 : (r > 70 ? PX*2 : PX);
+  for(let y = -r; y <= r; y += PXs){
     const xo = Math.sqrt(Math.max(0, r*r - y*y));
     const yy = snap(cy + y);
     if(Math.abs(y) >= ri){
-      ctx.fillRect(snap(cx - xo), yy, snap(xo*2), PX);        // 위/아래 뚜껑 부분
+      ctx.fillRect(snap(cx - xo), yy, snap(xo*2), PXs);       // 위/아래 뚜껑 부분
     }else{
       const xi = Math.sqrt(Math.max(0, ri*ri - y*y));
-      ctx.fillRect(snap(cx - xo), yy, snap(xo - xi), PX);     // 좌측 벽
-      ctx.fillRect(snap(cx + xi), yy, snap(xo - xi), PX);     // 우측 벽
+      ctx.fillRect(snap(cx - xo), yy, snap(xo - xi), PXs);    // 좌측 벽
+      ctx.fillRect(snap(cx + xi), yy, snap(xo - xi), PXs);    // 우측 벽
     }
   }
 }
@@ -2513,8 +2670,8 @@ class GameScene extends Scene {
 
     this.player = new Player(320, GAME_H/2, Save.data.level);
     this.stick  = new VirtualStick(STICK_CFG);
-    this.btnMsl  = new TouchButton(1090, 612, 56, ICON_MISSILE, 4, '#8fd0ff');
-    this.btnBomb = new TouchButton(1208, 516, 56, ICON_BOMB,    4, PAL.gold);
+    this.btnMsl  = new TouchButton(1078, 600, 68, ICON_MISSILE, 4, '#8fd0ff');
+    this.btnBomb = new TouchButton(1212, 496, 62, ICON_BOMB,    4, PAL.gold);
     Input.pointerHandler = {
       down:(id,x,y) => {
         // 상단 시간 게이지를 누르면 일시정지 (스펙 6.1)
@@ -2537,6 +2694,7 @@ class GameScene extends Scene {
     this.eshots = []; this.missiles = []; this.bombs = []; this.waves = [];
     this.pmissiles = []; this.items = []; this.roars = [];
     this.fireT = 0; this.score = 0; this.kills = 0; this.hurtT = 0;
+    Freeze.reset(); Flash.reset(); Popups.clear();
     this.boss = null; this.bossBannerT = 0; this.bossDeathT = 0;
 
     // 무기 / 생존 자원 (HP·하트 완전 연동은 Phase 6)
@@ -2588,7 +2746,11 @@ class GameScene extends Scene {
     if(big) this.finalBossKilled = true;          // 최종보스 격파 -> 폭발 연출 후 클리어
     this.bossDeathT = big ? 3.0 : 2.0;
     this.bossDeathX = b.x; this.bossDeathY = b.y; this.bossDeathR = big ? 150 : 100;
-    Shake.add(big ? 16 : 11, big ? 1.0 : 0.6);
+    Shake.add(big ? 22 : 15, big ? 1.0 : 0.6);
+    Flash.add('#ffffff', big ? 0.3 : 0.18, big ? 0.75 : 0.5);
+    Freeze.add(big ? 0.16 : 0.11);
+    this.waves.push(new Shockwave(b.x, b.y, big ? 1400 : 900, big ? 0.7 : 0.5));
+    Popups.add(b.x, b.y - 80, b.score, PAL.fire[0], 7);
   }
 
   /* 적이 "격파"되었을 때만 호출 (화면 밖 소멸은 제외) */
@@ -2663,7 +2825,7 @@ class GameScene extends Scene {
     this.stateT += dt;
     // 폭발/파티클 잔여 연출만 계속 재생
     for(const b of this.booms) b.update(dt);
-    Particles.update(dt); Shake.update(dt);
+    Particles.update(dt); Popups.update(dt); Flash.update(dt); Shake.update(dt);
     this.booms = this.booms.filter(o => !o.dead);
     if(this.bossDeathT > 0){
       this.bossDeathT -= dt;
@@ -2681,6 +2843,8 @@ class GameScene extends Scene {
   update(dt){
     if(this.state === 'pause'){ this.updatePaused(dt); return; }   // 게임 로직 완전 정지
     if(this.state !== 'play'){ this.updateEnd(dt); return; }
+    // 히트스톱 : 타격 순간 아주 잠깐 모든 것을 멈춰 임팩트를 만든다
+    if(Freeze.t > 0){ Freeze.t -= dt; Flash.update(dt); return; }
 
     this.t += dt;
     const p = this.player;
@@ -2731,9 +2895,10 @@ class GameScene extends Scene {
       const tg = pickTargets(this, m.x, m.y, n);
       const dmg = missileDamageOf(this.stage);
       for(let i=0;i<n;i++)
-        this.pmissiles.push(new PlayerMissile(m.x, m.y, tg[i], dmg, i*0.045));
-      Particles.spawn(m.x, m.y, 18, { ang:0, spread:1.7, spd:360, life:0.36 });  // 발사 화염 기둥
-      Shake.add(5, 0.12);
+        this.pmissiles.push(new PlayerMissile(m.x, m.y, tg[i], dmg, i*0.045, (i % 2) ? 1 : -1));
+      Particles.spawn(m.x, m.y, 30, { ang:0, spread:2.2, spd:520, life:0.42, size:PX*2 });
+      Shake.add(9, 0.18);
+      Flash.add('#ffe9c0', 0.08, 0.22);
       this.btnMsl.flash = 0.2;
     }
 
@@ -2781,6 +2946,8 @@ class GameScene extends Scene {
     for(const it of this.items)    it.update(dt);
     for(const r of this.roars)     r.update(dt, this);
     Particles.update(dt);
+    Popups.update(dt);
+    Flash.update(dt);
     Shake.update(dt);
     if(this.hurtT > 0) this.hurtT -= dt;
 
@@ -2949,7 +3116,9 @@ class GameScene extends Scene {
     Particles.render(ctx);
     for(const w of this.waves) w.render(ctx);
     for(const b of this.booms) b.render(ctx);
+    Popups.render(ctx);
     ctx.restore();
+    Flash.render(ctx);
 
     // ---- 전경 (플레이어보다 앞. 가장 빠르게 스쳐 지나가 속도감을 만든다) ----
     const fgx = -snap(((this.offFg + this.camLead*1.6) % GAME_W + GAME_W) % GAME_W);
@@ -3134,7 +3303,7 @@ class GameScene extends Scene {
     drawText(ctx, 'ENEMY ' + this.enemies.length + '  BOLT ' + this.bolts.length
       + '  PMSL ' + this.pmissiles.length + '  ITEM ' + this.items.length
       + '  ESHOT ' + (this.eshots.length + this.arrows.length + this.missiles.length + this.bombs.length)
-      + '  PART ' + Particles.list.length, 16, 604, 2, { color:'#00ff88' });
+      + '  PART ' + Particles.count, 16, 604, 2, { color:'#00ff88' });
     drawText(ctx, 'MSL ' + this.missileCount + '  BOMB ' + this.bombCount
       + '  COMBO ' + this.combo + '  STREAK ' + this.killStreak
       + '  MSLDMG ' + Math.round(missileDamageOf(this.stage)), 16, 622, 2, { color:'#00ff88' });
