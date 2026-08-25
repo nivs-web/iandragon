@@ -2690,7 +2690,9 @@ const TIMELINE = [
 ];
 /* 스테이지가 오를수록 적이 20% 씩 늘어난다 (화면이 꽉 차도록).
    다만 무한정 늘리면 프레임이 무너지므로 배율과 동시 등장 수에 상한을 둔다. */
-function enemyScale(stage){ return Math.min(6, Math.pow(1.2, (stage|0) - 1)); }
+function enemyScale(stage){
+  return Math.min(6, Math.pow(1.2, (stage|0) - 1)) * diffScale();
+}
 /* 화면 밖 위/아래에서 비스듬히 들어온 적을 목표 높이까지 내려/올려 보낸다.
    WingZombie 는 EnemyBase 를 상속하지 않으므로 공용 함수로 둔다. */
 function applyDive(e, dt){
@@ -3793,6 +3795,7 @@ class GameScene extends Scene {
     this.pmissiles = []; this.items = []; this.roars = [];
     this.score = this.carry ? this.carry.score : 0;
     this.kills = 0;
+    IW.send({ type:'ianworld:start', stage: this.stageNo });
     this.boss = null; this.bossBannerT = 0; this.bossDeathT = 0;
     this.killStreak = 0;
     // 아이템 투하 예약표 (인원수만큼 위아래로 나눠 떨어진다)
@@ -3974,6 +3977,15 @@ class GameScene extends Scene {
     if(this.state === 'clear' || this.state === 'over') return;
     this.state = kind; this.stateT = 0; this.endReason = reason || '';
     this.stick.up(this.stick.pid);
+    /* 오락실에 기록을 올린다. 클리어든 게임오버든 한 판은 한 판이다.
+       컨티뉴로 이어가면 다음 판이 끝날 때 더 높은 점수로 다시 올라간다. */
+    /* ★ 오락실 계정의 주인은 **1P** 다. 2P 는 같은 화면에 낀 손님이라
+       씬 합계(this.score)를 보내면 남이 번 점수까지 내 기록이 된다. */
+    IW.send({ type:'ianworld:result',
+              score: this.p1.score,
+              total: this.score,
+              stage: kind === 'clear' ? this.stage : Math.max(0, this.stage - 1),
+              level: this.p1.level });
     if(kind === 'clear'){
       this.bonus = Math.round(this.timeLeft) * 100 + this.totalLives() * 500;
       const alive = this.players();
@@ -4010,12 +4022,14 @@ class GameScene extends Scene {
       const pick = this.pauseItems()[this.menuIdx];
       if(pick === 'RESUME') this.setPause(false);
       else if(pick === '2P LEAVE'){ this.leave2P(); this.menuIdx = 0; this.setPause(false); }
+      else if(IW.on) IW.send({ type:'ianworld:exit' });
       else this.mgr.change(new StageSelectScene(this.stage));
     }
   }
   /* 다음 스테이지로 그대로 넘길 상태 */
   /* 점수는 씬 합계와 플레이어별로 같이 쌓는다 */
   addScore(v, pid){
+    v = Math.round(v * diffScale());     // 어려울수록 점수도 더 준다
     this.score += v;
     const p = pid === 2 ? this.p2 : (pid === 1 ? this.p1 : null);
     if(p) p.score += v;
@@ -4044,7 +4058,8 @@ class GameScene extends Scene {
       SND.sfx('confirm');
       this.mgr.change(new GameScene(this.stage));
     }else{
-      this.mgr.change(new StageSelectScene(this.stage));
+      if(IW.on) IW.send({ type:'ianworld:exit' });
+      else this.mgr.change(new StageSelectScene(this.stage));
     }
   }
   updateEnd(dt){
@@ -4332,7 +4347,7 @@ class GameScene extends Scene {
       if(Input.pressed('lvdown')) for(const p of this.players()) p.setLevel(p.level - 1);
     }
     if(!this.mgr.busy && Input.pressed('pause')) this.setPause(true);
-    if(!this.mgr.busy && Input.pressed('back'))  this.mgr.change(new TitleScene());
+    if(!this.mgr.busy && Input.pressed('back'))  backOut(this.mgr);
   }
 
   /* 쉴드에 닿은 적 공격을 빗물처럼 튕겨낸다 */
@@ -4997,7 +5012,7 @@ class OptionsScene extends Scene {
       { k:'RESET PROGRESS',v:this.confirmReset > 0 ? 'ENTER AGAIN' : 'PRESS ENTER',
         act:()=>{ if(this.confirmReset > 0){ Save.clearAll(); this.confirmReset = 0; SND.sfx('deny'); }
                   else this.confirmReset = 3; } },
-      { k:'BACK',          v:'',  act:()=>{ this.mgr.change(new TitleScene()); } }
+      { k:'BACK',          v:'',  act:()=>{ backOut(this.mgr); } }
     ];
   }
   rowY(i){ return 132 + i*40; }
@@ -5021,7 +5036,7 @@ class OptionsScene extends Scene {
       if(Input.pressed('right')){ r.set( 1); this.rebuildPreview(); SND.sfx('blip'); }
     }
     if(Input.pressed('confirm')) this.act(0);
-    if(Input.pressed('back') || Input.pressed('pause')) this.mgr.change(new TitleScene());
+    if(Input.pressed('back') || Input.pressed('pause')) backOut(this.mgr);
   }
 
   render(ctx){
@@ -5115,6 +5130,9 @@ class CharacterSelectScene extends Scene {
     if(this.mgr.busy) return;
     SND.sfx('confirm');
     Save.data.dragon = this.sel; Save.save();
+    IW.send({ type:'ianworld:character', index: this.sel });
+    /* 로비에서 [드래곤 변경] 으로 들어왔으면 고르는 순간 볼일이 끝났다 */
+    if(IW.on && IW.mode === 'chars'){ IW.send({ type:'ianworld:exit' }); return; }
     this.mgr.change(new StageSelectScene(Save.data.unlocked));
   }
 
@@ -5127,7 +5145,7 @@ class CharacterSelectScene extends Scene {
     if(Input.pressed('up'))    this.move((this.sel + 5) % 10);
     if(Input.pressed('down'))  this.move((this.sel + 5) % 10);
     if(Input.pressed('confirm')) this.confirm();
-    if(Input.pressed('back') || Input.pressed('pause')) this.mgr.change(new TitleScene());
+    if(Input.pressed('back') || Input.pressed('pause')) backOut(this.mgr);
   }
 
   render(ctx){
@@ -5394,8 +5412,77 @@ for(const ev of ['fullscreenchange','webkitfullscreenchange']){
 if(screen.orientation && screen.orientation.addEventListener)
   screen.orientation.addEventListener('change', function(){ setTimeout(resize, 120); });
 
+/* ==================================================================
+   오락실 이안월드 다리
+   ------------------------------------------------------------------
+   이 파일은 혼자서도 완전히 돌아간다. 오락실 앱이 iframe 으로 띄울 때만
+   ?embed=1 이 붙고, 그때만 계정/기록을 부모와 주고받는다.
+
+   부모 -> 게임 : { type:'ianworld:profile', nickname, difficulty, character }
+   게임 -> 부모 : ready / start / result / character / exit
+
+   ★ targetOrigin 에 '*' 를 쓰지 않는다. 부모와 같은 오리진에 있으므로
+     정확한 값을 줄 수 있고, 그러면 점수·닉네임이 엉뚱한 곳으로 갈 수 없다.
+     받을 때도 같은 값으로 걸러낸다.
+   ================================================================== */
+const IW = (function(){
+  let qs;
+  try{ qs = new URLSearchParams(location.search); }catch(e){ qs = new URLSearchParams(''); }
+  const embedded = qs.get('embed') === '1' && window.parent && window.parent !== window;
+  /* 부모의 오리진. 같은 사이트에 얹히므로 referrer 가 곧 부모다 */
+  const origin = (function(){
+    try{ return document.referrer ? new URL(document.referrer).origin : location.origin; }
+    catch(e){ return location.origin; }
+  })();
+  const api = {
+    on: embedded,
+    mode: qs.get('mode') || 'play',
+    nickname: '',
+    difficulty: 'normal',            // 로비에서 고른 난이도
+    send(msg){
+      if(!embedded) return;
+      try{ window.parent.postMessage(msg, origin); }catch(e){}
+    }
+  };
+  if(embedded){
+    window.addEventListener('message', function(e){
+      if(e.origin !== origin) return;
+      const d = e.data;
+      if(!d || typeof d !== 'object' || d.type !== 'ianworld:profile') return;
+      api.nickname = String(d.nickname || '');
+      if(d.difficulty) api.difficulty = String(d.difficulty);
+      /* 로비에서 고른 드래곤이 저장값보다 우선한다 — 방금 고른 게 최신이다 */
+      if(typeof d.character === 'number'){
+        Save.data.dragon = clamp(d.character | 0, 0, 9);
+        Save.save();
+      }
+    });
+  }
+  return api;
+})();
+
+/* 난이도 : 적 수와 점수에 같은 배율을 건다.
+   적이 많아지면 위험도 커지므로 점수도 같이 올라가야 어려움을 고를 이유가 생긴다. */
+const DIFF_MUL = { easy: 0.75, normal: 1, hard: 1.35 };
+function diffScale(){ return DIFF_MUL[IW.difficulty] || 1; }
+
+/* 타이틀로 나가는 자리. 임베드면 타이틀 대신 오락실 로비로 돌아간다 */
+function backOut(mgr){
+  if(IW.on){ IW.send({ type:'ianworld:exit' }); return; }
+  mgr.change(new TitleScene());
+}
+
 const scenes = new SceneManager();
 scenes.set(new TitleScene());
+
+/* 임베드로 들어오면 타이틀을 건너뛰고 부모가 지정한 화면부터 연다.
+   오락실 로비가 이미 "시작" 을 받은 뒤라 타이틀을 한 번 더 보여줄 이유가 없다. */
+if(IW.on){
+  if(IW.mode === 'chars')        scenes.set(new CharacterSelectScene());
+  else if(IW.mode === 'options') scenes.set(new OptionsScene());
+  else                           scenes.set(new StageSelectScene(Save.data.unlocked));
+  IW.send({ type:'ianworld:ready' });
+}
 
 const FIXED = 1/60, MAX_STEPS = 5;
 let last = performance.now(), acc = 0;
