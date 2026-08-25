@@ -1187,11 +1187,14 @@ class Player {
 const Save = {
   KEY: 'dragonstriker.save.v1',
   data: { unlocked: 1, level: 1, dragon: 0, bgm: 0, best: {}, opt: null },
+  available: true,
   load(){
     try{
       const j = localStorage.getItem(this.KEY);
       if(j) Object.assign(this.data, JSON.parse(j));
-    }catch(e){ /* 저장 불가 환경 - 메모리로만 진행 */ }
+      localStorage.setItem(this.KEY + '.t', '1');      // 쓰기까지 되는지 확인
+      localStorage.removeItem(this.KEY + '.t');
+    }catch(e){ this.available = false; }               // 막힌 환경 - 메모리로만 진행
     this.data.unlocked = clamp(this.data.unlocked|0, 1, 20) || 1;
     this.data.level    = clamp(this.data.level|0, 1, MAX_LEVEL) || 1;
     this.data.dragon   = clamp(this.data.dragon|0, 0, 9);
@@ -3548,8 +3551,10 @@ class GameScene extends Scene {
     }
     if(this.weather) this.weather.update(dt, K);
 
-    if(Input.pressed('lvup'))   p.setLevel(p.level + 1);
-    if(Input.pressed('lvdown')) p.setLevel(p.level - 1);
+    if(DEBUG){                                   // 치트키는 디버그(F3)에서만
+      if(Input.pressed('lvup'))   p.setLevel(p.level + 1);
+      if(Input.pressed('lvdown')) p.setLevel(p.level - 1);
+    }
     if(!this.mgr.busy && Input.pressed('pause')) this.setPause(true);
     if(!this.mgr.busy && Input.pressed('back'))  this.mgr.change(new TitleScene());
   }
@@ -4283,6 +4288,9 @@ class StageSelectScene extends Scene {
       { align:'right', color:PAL.gold, outline:PAL.outline });
     drawText(ctx, 'FIRE LV ' + Save.data.level + '   UNLOCKED ' + Save.data.unlocked + '/20',
       1264, 630, 2, { align:'right', color:'#8a7bb8' });
+    if(!Save.available)
+      drawText(ctx, 'PROGRESS NOT SAVED - BROWSER STORAGE BLOCKED', 640, 606, 2,
+        { align:'center', color:'#ff8a6a' });
     drawText(ctx, 'ARROWS: MOVE    ENTER: START    ESC: DRAGON', 24, 630, 2, { color:'#8a7bb8' });
     drawText(ctx, 'DRAGON: ' + currentDragon().id, 640, 630, 2,
       { align:'center', color:currentDragon().pal.L });
