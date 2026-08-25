@@ -3306,7 +3306,12 @@ const TIME_BAR = { x: 400, y: 16, w: 480, h: 26 };   // 상단 중앙 시간 게
 const P1_COLOR = '#8fd0ff', P2_COLOR = '#ffa8d0';
 
 class GameScene extends Scene {
-  constructor(stage){ super(); this.stageNo = clamp(stage || 1, 1, 20); }
+  /* carry : 이전 스테이지에서 이어받는 플레이어 상태 (컨티뉴) */
+  constructor(stage, carry){
+    super();
+    this.stageNo = clamp(stage || 1, 1, 20);
+    this.carry = carry || null;
+  }
   enter(){
     this.t = 0; this.stage = this.stageNo;
     const st = STAGES[this.stage];
@@ -3324,15 +3329,25 @@ class GameScene extends Scene {
     // --- 플레이어 ---
     this.p1 = new Player(320, GAME_H/2 - 60, Save.data.level, Save.data.dragon|0, 1);
     this.p2 = null;                 // 2P 는 게임 도중 WASD 로 난입
+    // 컨티뉴로 넘어왔으면 하트/HP/불레벨/무기/드래곤을 그대로 이어받는다
+    if(this.carry){
+      for(const c of this.carry.players){
+        const np = c.pid === 1 ? this.p1
+                 : (this.p2 = new Player(320, GAME_H/2 + 90, c.level, c.dragonIdx, 2));
+        np.dragonIdx = c.dragonIdx; np.level = c.level;
+        np.lives = c.lives; np.hp = c.hp; np.out = false;
+        np.missileCount = c.missileCount; np.bombCount = c.bombCount;
+      }
+      this.p1UsesKeysCarry = this.carry.p1UsesKeys;
+    }
     this.joining = false;           // 2P 캐릭터 선택 중
     this.joinSel = 0; this.joinT = 0;
-    this.p1UsesKeys = false;        // 1P 가 방향키를 쓴 적이 있는가
+    this.p1UsesKeys = !!this.p1UsesKeysCarry;   // 1P 가 방향키를 쓴 적이 있는가
 
     this.stick = new VirtualStick(makeStickCfg());
     this.buildButtons();
     Input.pointerHandler = {
       down:(id,x,y) => {
-        if(x >= GAME_W-58 && y <= 44){ toggleFullscreen(); return; }
         if(this.state === 'play' &&
            x >= TIME_BAR.x - 10 && x <= TIME_BAR.x + TIME_BAR.w + 10 &&
            y >= TIME_BAR.y - 10 && y <= TIME_BAR.y + TIME_BAR.h + 10){
@@ -3358,7 +3373,8 @@ class GameScene extends Scene {
     this.bolts = []; this.enemies = []; this.arrows = []; this.booms = [];
     this.eshots = []; this.missiles = []; this.bombs = []; this.waves = [];
     this.pmissiles = []; this.items = []; this.roars = [];
-    this.score = 0; this.kills = 0;
+    this.score = this.carry ? this.carry.score : 0;
+    this.kills = 0;
     this.boss = null; this.bossBannerT = 0; this.bossDeathT = 0;
     this.killStreak = 0; this.bombItemT = BOMB_ITEM_INTERVAL; this.bombItemsLeft = 4;
     this.pickupMsg = null; this.pickupT = 0;
@@ -3366,7 +3382,7 @@ class GameScene extends Scene {
 
     this.state = 'play'; this.stateT = 0;
     this.timeLeft = STAGE_TIME; this.endReason = ''; this.bonus = 0;
-    this.finalBossKilled = false; this.menuIdx = 0;
+    this.finalBossKilled = false; this.menuIdx = 0; this.endIdx = 0;
 
     this.director = new Director(this, this.stage);
     this.best = Save.data.best[this.stage] || 0;
@@ -3396,7 +3412,9 @@ class GameScene extends Scene {
   /* 1인일 때는 오른쪽에만, 2인일 때는 좌우로 나눠 배치한다 */
   buildButtons(){
     const o = optGet();
-    const br = BTN_R[clamp(o.btnSize,0,2)], br2 = Math.round(br*0.92);
+    // 2인이면 화면이 복잡해지므로 버튼을 30% 줄인다
+    const shrink = this.p2 ? 0.7 : 1;
+    const br = Math.round(BTN_R[clamp(o.btnSize,0,2)] * shrink), br2 = Math.round(br*0.92);
     const my = GAME_H - br - 52;
     this.btnMsl  = new TouchButton(GAME_W - br - 140, my, br, ICON_MISSILE, 4, P1_COLOR, this.p2 ? '1P' : '');
     this.btnBomb = new TouchButton(GAME_W - br2 - 24, my - br - 40, br2, ICON_BOMB, 4, PAL.gold, this.p2 ? '1P' : '');
@@ -3454,7 +3472,7 @@ class GameScene extends Scene {
       // 인원수만큼 (1인 1개 / 2인 2개)
       const n = this.players().length;
       for(let i=0;i<n;i++)
-        this.items.push(new Item(e.x + (i - (n-1)/2)*150, e.y, ITEM_KIND.POWER));
+        this.items.push(new Item(e.x, e.y + (i - (n-1)/2)*300, ITEM_KIND.POWER));
       return;
     }
     if(e instanceof Boss){
@@ -3523,7 +3541,8 @@ class GameScene extends Scene {
       SND.sfx('fanfare');
       Save.data.unlocked = Math.max(Save.data.unlocked, Math.min(20, this.stage + 1));
       this.levelUpReward = this.p1.level < MAX_LEVEL;
-      Save.data.level = clamp(this.p1.level + 1, 1, MAX_LEVEL);
+      for(const p of this.allPlayers()) if(!p.out) p.setLevel(p.level + 1);
+      Save.data.level = this.p1.level;
     }else{
       SND.sfx('gameover');
       Save.data.level = this.p1.level;
@@ -3548,6 +3567,34 @@ class GameScene extends Scene {
       else this.mgr.change(new StageSelectScene(this.stage));
     }
   }
+  /* 다음 스테이지로 그대로 넘길 상태 */
+  makeCarry(){
+    return {
+      score: this.score,
+      p1UsesKeys: this.p1UsesKeys,
+      players: this.allPlayers().filter(p => !p.out).map(p => ({
+        pid: p.pid, dragonIdx: p.dragonIdx, level: p.level,
+        lives: p.lives, hp: p.hp,
+        missileCount: p.missileCount, bombCount: p.bombCount
+      }))
+    };
+  }
+  endItems(){
+    if(this.state !== 'clear') return ['RETRY STAGE', 'QUIT TO MENU'];
+    return this.stage < 20 ? ['CONTINUE', 'QUIT TO MENU'] : ['QUIT TO MENU'];
+  }
+  doEndPick(){
+    const pick = this.endItems()[this.endIdx];
+    if(pick === 'CONTINUE'){
+      SND.sfx('confirm');
+      this.mgr.change(new GameScene(this.stage + 1, this.makeCarry()));
+    }else if(pick === 'RETRY STAGE'){
+      SND.sfx('confirm');
+      this.mgr.change(new GameScene(this.stage));
+    }else{
+      this.mgr.change(new StageSelectScene(this.stage));
+    }
+  }
   updateEnd(dt){
     this.stateT += dt;
     for(const b of this.booms) b.update(dt);
@@ -3562,8 +3609,14 @@ class GameScene extends Scene {
       }
     }
     const tap = this.uiTap; this.uiTap = false;
-    if(this.stateT > 1.0 && (Input.pressed('confirm') || Input.pressed('pause') || tap))
-      this.mgr.change(new StageSelectScene(this.stage));
+    if(this.stateT < 1.0) return;
+    const n = this.endItems().length;
+    if(Input.pressed('up') || Input.pressed('left') || Input.pressed('p2left'))
+      { this.endIdx = (this.endIdx + n - 1) % n; SND.sfx('blip'); }
+    if(Input.pressed('down') || Input.pressed('right') || Input.pressed('p2right'))
+      { this.endIdx = (this.endIdx + 1) % n; SND.sfx('blip'); }
+    if(Input.pressed('confirm') || tap
+       || Input.pressed('p1missile') || Input.pressed('p2missile')) this.doEndPick();
   }
 
   /* 플레이어 1명분의 이동 / 발사 / 무기 */
@@ -3919,11 +3972,11 @@ class GameScene extends Scene {
         { align:'center', color:PAL.gold });
   }
 
-  /* 플레이어 정보 블록 : 하트 -> 생명 게이지 -> 레벨 순으로 자기 버튼 위에 */
-  drawPlayerPanel(ctx, p, cx, bottomY, col){
+  /* 플레이어 정보 블록 : 하트 -> 생명 게이지 -> 레벨.
+     1인일 땐 왼쪽 위, 2P 가 합류하면 1P 는 오른쪽 위로 옮기고 2P 가 왼쪽 위를 쓴다 */
+  drawPlayerPanel(ctx, p, x, y0, col){
     const W = 216;
-    const x = clamp(cx - W/2, 12, GAME_W - W - 12);
-    let y = bottomY - 62;
+    let y = y0;
     // 하트
     const rows = ['.XX.XX.','XXXXXXX','.XXXXX.','..XXX..','...X...'];
     for(let i=0;i<Math.min(MAX_LIVES, 8);i++){
@@ -3952,10 +4005,14 @@ class GameScene extends Scene {
   }
 
   renderHUD(ctx){
-    // 각자 자기 버튼 위에 정보 표시 (2P 왼쪽 / 1P 오른쪽)
-    const topOf = b2 => b2.y - b2.r - 14;
-    this.drawPlayerPanel(ctx, this.p1, this.btnBomb.x, topOf(this.btnBomb), P1_COLOR);
-    if(this.p2) this.drawPlayerPanel(ctx, this.p2, this.btnBomb2.x, topOf(this.btnBomb2), P2_COLOR);
+    // 1인 : 왼쪽 위 고정 / 2인 : 2P 왼쪽 위, 1P 오른쪽 위
+    const LX = 24, RX = GAME_W - 240, TY = 20;
+    if(this.p2){
+      this.drawPlayerPanel(ctx, this.p2, LX, TY, P2_COLOR);
+      this.drawPlayerPanel(ctx, this.p1, RX, TY, P1_COLOR);
+    }else{
+      this.drawPlayerPanel(ctx, this.p1, LX, TY, P1_COLOR);
+    }
 
     drawText(ctx, 'STAGE ' + this.stage + ' - ' + this.theme.n, 640, 52, 2,
       { align:'center', color:'#dff0ff', shadow:'#0a1830' });
@@ -4007,9 +4064,6 @@ class GameScene extends Scene {
     drawText(ctx, String(secs).padStart(3,'0'), B.x + B.w/2, B.y + 5, 3,
       { align:'center', color: urgent ? '#ffffff' : PAL.outline, outline: urgent ? '#c81f2e' : null });
 
-    ctx.globalAlpha = 0.8;
-    drawFsIcon(ctx, GAME_W - 46, 10, 32, '#dff0ff', isFullscreen());
-    ctx.globalAlpha = 1;
     drawText(ctx, this.p2 ? '1P: ARROWS / RSHIFT / RALT     2P: WASD / ` / 1'
                           : '1P: ARROWS / RSHIFT / RALT     ESC: PAUSE', 640, 700, 2,
       { align:'center', color:'#cfe6ff', shadow:'#0a1830' });
@@ -4062,9 +4116,31 @@ class GameScene extends Scene {
         drawText(ctx, rows[i][1], 860, y, 4, { align:'right', color:PAL.white, outline:PAL.outline });
       }
     }
-    if(this.stateT > 1.3 && Math.floor(this.stateT*1.6) % 2 === 0)
-      drawText(ctx, 'PRESS ENTER', 640, 626, 5,
-        { align:'center', color:PAL.gold, outline:PAL.outline, shadow:'#000' });
+    if(this.stateT <= 1.1) return;
+    // ---- 다음 행동 선택 ----
+    const items = this.endItems();
+    if(clear && this.stage < 20)
+      drawText(ctx, 'GO TO STAGE ' + (this.stage + 1) + ' ?', 640, 556, 4,
+        { align:'center', color:'#cfe6ff', outline:PAL.outline });
+    for(let i=0;i<items.length;i++){
+      const on = i === this.endIdx;
+      const x = items.length === 1 ? 640 : (i === 0 ? 420 : 860);
+      const y = 610;
+      const w = 300, h = 56;
+      ctx.fillStyle = on ? PAL.gold : '#241c3e';
+      ctx.fillRect(x - w/2 - PX, y - PX, w + PX*2, h + PX*2);
+      ctx.fillStyle = on ? '#3a2a05' : '#120d24';
+      ctx.fillRect(x - w/2, y, w, h);
+      drawText(ctx, items[i], x, y + 18, 4,
+        { align:'center', color: on ? PAL.gold : '#7f8bb0', outline:PAL.outline });
+      if(on){
+        const g = Math.round(Math.sin(this.stateT*7))*PX;
+        ctx.strokeStyle = PAL.gold; ctx.lineWidth = 2;
+        ctx.strokeRect(x - w/2 - PX*2 - g, y - PX*2 - g, w + (PX*2+g)*2, h + (PX*2+g)*2);
+      }
+    }
+    drawText(ctx, 'UP-DOWN / LEFT-RIGHT : SELECT      ENTER OR MISSILE : OK', 640, 686, 2,
+      { align:'center', color:'#8a7bb8' });
   }
 
   renderDebug(ctx){
@@ -4836,7 +4912,8 @@ function frame(now){
   scenes.render(ctx);
   // 전체화면 버튼은 타이틀에서만 노출 (게임 중에는 우상단 아이콘 사용)
   if(fsBtnEl){
-    const showFs = !portrait && !isStandalone() && scenes.current instanceof TitleScene;
+    // 게임 중에는 숨기고 로비(타이틀/옵션/캐릭터/스테이지 선택)에서만 노출
+    const showFs = !portrait && !isStandalone() && !(scenes.current instanceof GameScene);
     const want = showFs ? 'block' : 'none';
     if(fsBtnEl.style.display !== want){
       fsBtnEl.style.display = want;
