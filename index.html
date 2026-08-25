@@ -72,6 +72,7 @@
     box-shadow:0 0 0 3px #14040a;
   }
   #fstoast b{ color:#ffd24a; }
+  #fstoast button{ -webkit-tap-highlight-color:transparent; touch-action:manipulation; }
 </style>
 </head>
 <body>
@@ -102,6 +103,7 @@
    사운드: Web Audio 전량 합성 (BGM 3곡 시퀀서 + 효과음 16종)
    ================================================================== */
 
+const BUILD = 'B7';                 // 업로드한 파일이 최신인지 확인용 표식
 const GAME_W = 1280, GAME_H = 720;
 const PX = 4;                       // 도트 1칸 = 4px. 모든 배경 요소는 이 그리드에 스냅
 const COLS = GAME_W / PX;           // 320칸
@@ -3153,7 +3155,7 @@ class TitleScene extends Scene {
       { align:'center', color:PAL.dim });
     drawText(ctx, 'MOVE: WASD / ARROWS   MISSILE: Q   BOMB: E   PAUSE: ESC', 640, 672, 2,
       { align:'center', color:PAL.dim });
-    drawText(ctx, 'PHASE 1 - V0.1', 1264, 700, 2, { align:'right', color:PAL.goldDim });
+    drawText(ctx, 'BUILD ' + BUILD, 1264, 700, 2, { align:'right', color:PAL.goldDim });
     drawText(ctx, 'F3: DEBUG', 16, 700, 2, { color:PAL.goldDim });
 
     if(DEBUG) drawHUDDebug(ctx);
@@ -3986,6 +3988,7 @@ function lockLandscape(){
       screen.orientation.lock('landscape').catch(function(){});
   }catch(e){}
 }
+const IN_IFRAME = (function(){ try{ return window.self !== window.top; }catch(e){ return true; } })();
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
             || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const IS_TOUCH = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
@@ -4008,8 +4011,16 @@ function fsToast(html, ms){
 let FS_ERR = '';                       // 마지막 실패 사유 (추측하지 않고 실제 오류를 보여준다)
 function fsDiag(){
   return '<span style="font-size:12px;color:#8a7bb8">'
-       + location.protocol + ' / fsEnabled=' + document.fullscreenEnabled
-       + (FS_ERR ? ' / ' + FS_ERR : '') + '</span>';
+       + 'BUILD ' + BUILD + ' / ' + location.protocol
+       + ' / fsEnabled=' + document.fullscreenEnabled
+       + ' / iframe=' + IN_IFRAME
+       + (FS_ERR ? '<br>' + FS_ERR : '') + '</span>';
+}
+/* iframe 안에서는 부모가 allow="fullscreen" 을 주지 않으면 절대 안 된다.
+   게임 쪽에서 뚫을 방법이 없으므로 최상위 탭으로 여는 길을 열어준다. */
+function openTopLevel(){
+  try{ window.open(location.href, '_blank', 'noopener'); }
+  catch(e){ try{ window.top.location.href = location.href; }catch(e2){} }
 }
 
 /* 안드로이드 크롬 등에서 전체화면 API 가 막혔을 때의 차선책:
@@ -4030,6 +4041,20 @@ function isPseudo(){ return document.body.classList.contains('pfs'); }
 /* 환경별로 실제로 통하는 방법을 안내한다 */
 function fsBlocked(){
   const isFile = location.protocol === 'file:';
+  // iframe 안에 박혀 있으면 이게 100% 원인이다 (부모가 권한을 줘야 함)
+  if(IN_IFRAME || document.fullscreenEnabled === false){
+    pseudoFullscreen();
+    fsToast('이 게임이 <b>다른 페이지 안(iframe)에</b> 들어가 있어서<br>'
+          + '브라우저가 전체화면을 막고 있습니다.<br><br>'
+          + '<button id="fsopen" style="padding:12px 20px;font-size:16px;font-weight:800;'
+          + 'font-family:inherit;color:#0a0616;background:#ffd24a;border:none;cursor:pointer">'
+          + '새 탭에서 열기</button><br><br>'
+          + '<span style="font-size:13px">영구 해결: 감싸고 있는 iframe 태그에 '
+          + '<b>allow="fullscreen"</b> 를 넣어주세요</span><br>' + fsDiag(), 20000);
+    const ob = document.getElementById('fsopen');
+    if(ob) ob.addEventListener('click', function(e){ e.preventDefault(); openTopLevel(); });
+    return;
+  }
   if(isFile && IS_TOUCH){
     // 안드로이드/아이폰에서 파일을 직접 연 경우 - 이게 가장 흔한 원인
     pseudoFullscreen();
