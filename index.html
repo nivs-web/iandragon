@@ -1534,12 +1534,38 @@ const STAGES = [null,
 
 /* 스테이지 테마색을 입힌 최종보스 팔레트 (캐시) */
 const _bossPalCache = {};
+/* 최종보스 외형 등급. 스테이지가 오를수록 가시/칼날이 붙고 색이 험악해진다. */
+function bossTierOf(stage){
+  const s = clamp(stage|0, 1, 20);
+  return s <= 4 ? 0 : s <= 8 ? 1 : s <= 12 ? 2 : s <= 16 ? 3 : 4;
+}
+const BOSS_TIER_NAME = ['ZOMBIE DRAGON LORD', 'CURSED DRAGON LORD', 'ABYSS DRAGON LORD',
+                        'DOOM DRAGON LORD', 'CHAOS DRAGON LORD'];
+/* 등급별로 덧붙는 파츠 : 등가시 -> 꼬리칼날 순으로 늘어난다 */
+function bossOverlaysOf(tier){
+  const f = FORMS.B, ov = [B_RIDER_KING];
+  if(tier >= 1) ov.unshift(f.parts.ridge);
+  if(tier >= 3) ov.unshift(f.parts.tail);
+  return ov;
+}
 function bossPalOf(stage){
   if(_bossPalCache[stage]) return _bossPalCache[stage];
   const acc = STAGES[clamp(stage,1,20)].acc;
+  const tier = bossTierOf(stage);
   const p = {};
   for(const k in BOSS_PAL) p[k] = mixHex(BOSS_PAL[k], acc, 0.5);
-  p.E = BOSS_PAL.E; p.H = BOSS_PAL.H; p.W = BOSS_PAL.W;   // 눈/이빨은 유지
+  // 등급이 오를수록 몸을 어둡게 가라앉히고 가시/발톱은 핏빛으로 -> 악의 기운
+  if(tier > 0){
+    const dark = tier * 0.13;
+    for(const k of ['K','D','M','L','T','w','f','k'])
+      if(p[k]) p[k] = mixHex(p[k], '#090410', dark);
+    const blood = ['#ff2b3c','#ff1f2e','#e01024','#c4001c','#a80018'][tier];
+    p.S = mixHex(p.S || '#8f7ec4', blood, 0.35 + tier*0.12);
+    p.C = mixHex(p.C || '#e6dff2', blood, 0.20 + tier*0.12);
+    p.G = mixHex(p.G || '#b8a9d4', blood, 0.25 + tier*0.10);
+  }
+  p.E = ['#ff2b3c','#ff6a1e','#ffd12b','#8cff3a','#ff2bd0'][tier];   // 눈빛도 달라진다
+  p.H = BOSS_PAL.H; p.W = BOSS_PAL.W;
   return (_bossPalCache[stage] = Object.assign(p, RIDER_EXTRA));
 }
 
@@ -1970,6 +1996,7 @@ class WingZombie {
     // 넉백 감쇠
     if(this.knock > 0){ this.knock = Math.max(0, this.knock - 900*dt); }
     this.x += (this.vx + this.knock)*dt;
+    applyDive(this, dt);
     this.y = this.baseY + Math.sin(this.t*2.2)*22;
     // 날갯짓
     this.animT += dt;
@@ -2241,12 +2268,15 @@ class Shockwave {                       // 충격파 링 (보스 분노 / 미사
    적 공통 베이스
    ================================================================== */
 class EnemyBase {
+  /* 보스가 쏘는 것에 스테이지 비례 데미지를 실어준다 (일반 적은 기본값 25) */
+  arm(o){ if(this.hurtDmg) o.hurt = this.hurtDmg; return o; }
   constructor(x, y, hp, score){
     this.x = x; this.y = y; this.baseY = y;
     this.hp = hp; this.maxHp = hp; this.score = score;
     this.t = Math.random()*6; this.animT = 0; this.pose = 2;
     this.flash = 0; this.knock = 0; this.dead = false;
     this.isBoss = false;
+    this.diveTo = null; this.diveV = 0;      // 대각선 진입용 (DIAGONAL_STAGE 초과)
   }
   flapUpdate(dt, rate){
     this.animT += dt;
@@ -2282,6 +2312,7 @@ class DragonRider extends EnemyBase {
     if(this.flash > 0) this.flash -= dt;
     if(this.knock > 0) this.knock = Math.max(0, this.knock - 900*dt);
     this.x += (this.vx + this.knock)*dt;
+    applyDive(this, dt);
     this.y = this.baseY + Math.sin(this.t*1.7)*30;
     this.flapUpdate(dt, 0.10);
     if(this.x < GAME_W - 80){
@@ -2332,6 +2363,7 @@ class HeavyRider extends EnemyBase {
     // 화면 안으로 들어오면 감속해서 버팀
     if(this.x < GAME_W - 260) this.vx = Math.min(0, this.vx + 40*dt);
     this.x += (this.vx + this.knock)*dt;
+    applyDive(this, dt);
     this.y = this.baseY + Math.sin(this.t*1.2)*38;
     this.flapUpdate(dt, 0.13);
     if(this.x < GAME_W - 60){
@@ -2378,6 +2410,8 @@ class MidBoss extends EnemyBase {
   constructor(stage, level){
     super(GAME_W + 180, GAME_H/2, midBossHpOf(stage, level), 5000);
     this.isBoss = true; this.name = 'DRAGON KNIGHT';
+    this.stageNo = stage;
+    this.hurtDmg = Math.round(22 * stagePowerOf(stage));
     this.phase = 'enter'; this.pt = 0; this.pi = 0;
     this.homeX = GAME_W - 230; this.homeY = GAME_H/2;
     this.enraged = false;
@@ -2412,8 +2446,8 @@ class MidBoss extends EnemyBase {
         if(this.breathT <= 0 && this.breathN > 0){
           this.breathN--; this.breathT = 0.45;
           for(let i=0;i<11;i++)
-            scene.eshots.push(new EnemyFire(this.x - 110, this.y + 10 + (i-5)*5,
-              Math.PI + (i-5)*0.05, 470 + i*6, 15));
+            scene.eshots.push(this.arm(new EnemyFire(this.x - 110, this.y + 10 + (i-5)*5,
+              Math.PI + (i-5)*0.05, 470 + i*6, 15)));
           Shake.add(3, 0.08);
         }
         if(this.breathN <= 0 && this.breathT <= -0.6){ this.phase = 'idle'; this.pt = 0; }
@@ -2464,13 +2498,17 @@ const BOSS_CELL = 10.8;                              // FORM B x10.8 = 389 x 346
 class Boss extends EnemyBase {
   constructor(stage, level){
     super(GAME_W + 280, GAME_H/2, bossHpOf(stage, level), 12000);
-    this.isBoss = true; this.name = 'ZOMBIE DRAGON LORD';
+    this.isBoss = true; this.name = BOSS_TIER_NAME[bossTierOf(stage)];
     this.phase = 'enter'; this.pt = 0; this.pi = 0;
     this.homeX = GAME_W - 250; this.homeY = GAME_H/2;
     this.enraged = false;
     this.swirlN = 0; this.swirlT = 0; this.swirlA = 0;
     this.wallN = 0; this.wallT = 0;
     this.stageNo = stage;
+    this.hurtDmg = Math.round(28 * stagePowerOf(stage));
+    this.tier = bossTierOf(stage);               // 스테이지대별 외형 등급
+    this.absorb = stage > 10 ? Math.min(0.5, 0.3 + (stage-11)*0.022) : 0;  // 미사일 흡수 확률
+    this.absorbT = 0;
     this.pal = bossPalOf(stage);                 // 스테이지 테마색 연동
   }
   get box(){ return { x:this.x - 144, y:this.y - 125, w:288, h:250 }; }
@@ -2478,6 +2516,7 @@ class Boss extends EnemyBase {
   update(dt, scene){
     this.t += dt;
     if(this.flash > 0) this.flash -= dt;
+    if(this.absorbT > 0) this.absorbT -= dt;
     if(!this.enraged && this.hp <= this.maxHp*0.5){
       this.enraged = true;
       Shake.add(12, 0.5);
@@ -2506,7 +2545,7 @@ class Boss extends EnemyBase {
           const arms = this.enraged ? 6 : 5;
           for(let i=0;i<arms;i++){
             const a = Math.PI + Math.sin(this.swirlA)*1.05 + i*(Math.PI*2/arms)*0.20;
-            scene.eshots.push(new EnemyFire(this.x - 130, this.y, a, 470, 15));
+            scene.eshots.push(this.arm(new EnemyFire(this.x - 130, this.y, a, 470, 15)));
           }
         }
         if(this.swirlN <= 0 && this.swirlT < -0.4){ this.phase = 'idle'; this.pt = 0; }
@@ -2519,7 +2558,7 @@ class Boss extends EnemyBase {
           const gap = 120 + Math.random()*(GAME_H - 300);   // 통과할 수 있는 틈
           for(let y=60; y<GAME_H-40; y+=44){
             if(y > gap - 76 && y < gap + 76) continue;
-            scene.eshots.push(new EnemyFire(this.x - 120, y, Math.PI, 400, 15));
+            scene.eshots.push(this.arm(new EnemyFire(this.x - 120, y, Math.PI, 400, 15)));
           }
           Shake.add(4, 0.1);
         }
@@ -2550,8 +2589,8 @@ class Boss extends EnemyBase {
           if(this.x < -180) this.x = -180;
           // 지나간 자리에 불길을 남긴다
           if(Math.random() < 0.75){
-            scene.eshots.push(new EnemyFire(this.x + 60, this.y + (Math.random()-0.5)*200,
-              Math.PI*0.5 + (Math.random()-0.5)*2.4, 120, 13));
+            scene.eshots.push(this.arm(new EnemyFire(this.x + 60, this.y + (Math.random()-0.5)*200,
+              Math.PI*0.5 + (Math.random()-0.5)*2.4, 120, 13)));
           }
           Particles.spawn(this.x + 90, this.y + (Math.random()-0.5)*200, 2,
             { spd:260, life:0.35, grav:0 });
@@ -2599,7 +2638,16 @@ class Boss extends EnemyBase {
   render(ctx){
     const pal = this.enraged ? BOSS_PAL_RAGE : this.pal;
     drawFormDragon(ctx, pal, 'B', BOSS_CELL, this.x, this.y, this.pose, true,
-      this.flash > 0 ? '#ffffff' : null, [B_RIDER_KING]);
+      this.flash > 0 ? '#ffffff' : null, bossOverlaysOf(this.tier));
+    // 미사일을 튕겨내는 보호막 (10스테이지 초과)
+    if(this.absorbT > 0){
+      const k = this.absorbT / 0.35;
+      ctx.globalAlpha = k * 0.85;
+      drawPixelRing(ctx, this.x, this.y, 150 + (1-k)*26, PX*3, '#9ad8ff');
+      ctx.globalAlpha = k * 0.5;
+      drawPixelRing(ctx, this.x, this.y, 132 + (1-k)*26, PX*2, '#ffffff');
+      ctx.globalAlpha = 1;
+    }
   }
 }
 
@@ -2617,54 +2665,105 @@ const TIMELINE = [
 /* 스테이지가 오를수록 적이 20% 씩 늘어난다 (화면이 꽉 차도록).
    다만 무한정 늘리면 프레임이 무너지므로 배율과 동시 등장 수에 상한을 둔다. */
 function enemyScale(stage){ return Math.min(6, Math.pow(1.2, (stage|0) - 1)); }
-const MAX_ALIVE_ENEMIES = 80;
+/* 화면 밖 위/아래에서 비스듬히 들어온 적을 목표 높이까지 내려/올려 보낸다.
+   WingZombie 는 EnemyBase 를 상속하지 않으므로 공용 함수로 둔다. */
+function applyDive(e, dt){
+  if(e.diveTo == null) return;
+  e.baseY += e.diveV*dt;
+  if((e.diveV > 0 && e.baseY >= e.diveTo) || (e.diveV < 0 && e.baseY <= e.diveTo)){
+    e.baseY = e.diveTo; e.diveTo = null;
+  }
+}
+const MAX_ALIVE_ENEMIES = 64;       // 프레임 예산. 이보다 늘려도 화면에선 구분이 안 된다.
+const DIAGONAL_STAGE = 10;          // 이 스테이지를 넘으면 위/아래 대각선 등장 추가
 
-const BOSS_FORCE_T = 64;        // 이 시각이 되면 중간보스 상태와 무관하게 최종보스 등장
-const BOSS_AFTER_MID = 6;       // 중간보스 처치 후 대기 시간
+/* 최종보스는 "중간보스를 잡은 뒤" 에만 나온다.
+   예전엔 시간이 되면 중간보스가 살아있어도 최종보스가 겹쳐 나와서 난장판이었다. */
+const BOSS_AFTER_MID = 5;       // 중간보스 전멸 후 최종보스까지의 뜸
+const BOSS_ADD_INTERVAL = 5.5;  // 보스전 중 잡몹 보충 주기
+const TWIN_MID_STAGE = 10;      // 이 스테이지를 넘으면 중간보스가 2마리
 
 class Director {
   constructor(scene, stage){
     this.s = scene; this.stage = stage || 1;
     this.t = 0; this.idx = 0;
     this.midKilledAt = -1; this.bossSpawned = false; this.midSpawned = false;
+    this.midAlive = 0;                 // 살아있는 중간보스 수 (2마리일 수 있다)
+    this.addT = BOSS_ADD_INTERVAL;     // 보스전 중 잡몹 보충 타이머
   }
   update(dt){
     this.t += dt;
-    const s = this.s;
     // 스크립트 소화
     while(this.idx < TIMELINE.length && this.t >= TIMELINE[this.idx].t){
       const e = TIMELINE[this.idx++];
       if(e.k === 'midboss'){ this.spawnMid(); }
       else this.spawnGroup(e.k, e.n);
     }
-    // 최종보스 등장 조건
-    if(!this.bossSpawned){
-      const afterMid = this.midKilledAt >= 0 && this.t - this.midKilledAt >= BOSS_AFTER_MID;
-      if(afterMid || this.t >= BOSS_FORCE_T) this.spawnBoss();
+    // 최종보스는 중간보스를 전부 잡은 뒤에만. 둘이 동시에 나오지 않는다.
+    if(!this.bossSpawned && this.midKilledAt >= 0 && this.t - this.midKilledAt >= BOSS_AFTER_MID)
+      this.spawnBoss();
+    // 보스전 중에도 잡몹이 계속 흘러들어온다 (보스만 덩그러니 있으면 심심하다)
+    if(this.midSpawned){
+      this.addT -= dt;
+      if(this.addT <= 0){
+        this.addT = BOSS_ADD_INTERVAL;
+        this.spawnGroup(Math.random() < 0.72 ? 'zombie' : 'rider', Math.random() < 0.5 ? 2 : 3);
+      }
     }
   }
   spawnGroup(kind, n){
     const s = this.s;
     n = Math.max(1, Math.round(n * enemyScale(this.stage)));
-    if(s.enemies.length >= MAX_ALIVE_ENEMIES) return;          // 과부하 방지
-    n = Math.min(n, MAX_ALIVE_ENEMIES - s.enemies.length);
-    const y0 = 150 + Math.random()*380;
-    // 수가 많아지면 여러 줄로 나눠서 화면을 채운다
+    const alive = s.enemies.length;
+    if(alive >= MAX_ALIVE_ENEMIES) return;                     // 과부하 방지
+    n = Math.min(n, MAX_ALIVE_ENEMIES - alive);
+    // 10스테이지를 넘으면 정면뿐 아니라 위/아래 대각선에서도 밀고 들어온다
+    const diagonal = this.stage > DIAGONAL_STAGE && Math.random() < 0.5;
+    const from = diagonal ? (Math.random() < 0.5 ? -1 : 1) : 0;
+    const y0 = from === 0 ? 150 + Math.random()*380
+             : (from < 0 ? -70 - Math.random()*90 : GAME_H + 70 + Math.random()*90);
     const perCol = Math.max(1, Math.ceil(n / Math.ceil(n/6)));
     for(let i=0;i<n;i++){
       const col = (i / perCol) | 0, row = i % perCol;
-      const y = clamp(y0 + (row - perCol/2)*58 + (col%2)*29, 110, 610);
       const x = GAME_W + 80 + col*96 + (row%2)*34;
-      if(kind === 'zombie')     s.enemies.push(new WingZombie(x, y, 160 + Math.random()*70));
-      else if(kind === 'rider') s.enemies.push(new DragonRider(x, y));
-      else if(kind === 'heavy') s.enemies.push(new HeavyRider(x, y));
+      let e;
+      if(from === 0){
+        const y = clamp(y0 + (row - perCol/2)*58 + (col%2)*29, 110, 610);
+        if(kind === 'zombie')     e = new WingZombie(x, y, 160 + Math.random()*70);
+        else if(kind === 'rider') e = new DragonRider(x, y);
+        else                      e = new HeavyRider(x, y);
+      }else{
+        // 화면 밖 위/아래에서 비스듬히 들어와 플레이 구역으로 자리잡는다
+        const y  = y0 + (row - perCol/2)*46 + col*30*from;
+        const ty = clamp(140 + Math.random()*440, 120, 600);
+        if(kind === 'zombie')     e = new WingZombie(x, y, 160 + Math.random()*70);
+        else if(kind === 'rider') e = new DragonRider(x, y);
+        else                      e = new HeavyRider(x, y);
+        e.diveTo = ty;                    // 목표 높이까지 대각선으로 파고든다
+        e.diveV  = (from < 0 ? 1 : -1) * (110 + Math.random()*70);
+      }
+      s.enemies.push(e);
     }
   }
   spawnMid(){
     if(this.midSpawned) return;
     this.midSpawned = true;
-    const b = new MidBoss(this.stage, this.s.p1.level);
-    this.s.enemies.push(b); this.s.boss = b;
+    // 10스테이지를 넘으면 한 번에 2마리. 한 마리당 체력은 65% 로 낮춰
+    // 물량은 늘리되 무한정 길어지지는 않게 한다.
+    const twin = this.stage > TWIN_MID_STAGE;
+    const n = twin ? 2 : 1;
+    for(let i=0;i<n;i++){
+      const b = new MidBoss(this.stage, this.s.p1.level);
+      if(twin){
+        b.hp = b.maxHp = Math.round(b.maxHp * 0.65);
+        b.homeY = GAME_H/2 + (i === 0 ? -140 : 140);
+        b.y = b.baseY = b.homeY;
+        b.x += i*150;
+      }
+      this.s.enemies.push(b);
+      if(i === 0) this.s.boss = b;
+    }
+    this.midAlive = n;
     this.s.bossBannerT = 2.2;
     Shake.add(6, 0.4);
     SND.sfx('warn');
@@ -2679,7 +2778,12 @@ class Director {
     SND.sfx('warn');
   }
   onBossKilled(b){
-    if(b instanceof MidBoss) this.midKilledAt = this.t;
+    if(b instanceof MidBoss){
+      this.midAlive = Math.max(0, this.midAlive - 1);
+      // 2마리일 때는 둘 다 잡아야 최종보스가 나온다
+      if(this.midAlive === 0) this.midKilledAt = this.t;
+      else this.s.boss = this.s.enemies.find(e => e instanceof MidBoss && !e.dead) || null;
+    }
   }
 }
 
@@ -2700,8 +2804,12 @@ function bossPowerScale(level){ return Math.pow(fireDpsOf(level) / fireDpsOf(1),
 // 불 화력을 절반으로 낮췄으므로 보스 기준 체력도 같이 내린다.
 // (이 값이 그대로면 보스전 시간이 2배가 되어 제한시간 안에 못 잡는다)
 const MID_BOSS_BASE = 3200, BOSS_MUL = 2.4;
+/* 스테이지가 1 오를 때마다 보스가 5% 씩 단단해지고 5% 씩 세게 때린다.
+   1스테이지와 20스테이지 보스가 똑같으면 스테이지를 올라갈 이유가 없다.
+   20스테이지 기준 2.53배. */
+function stagePowerOf(stage){ return Math.pow(1.05, clamp(stage|0, 1, 20) - 1); }
 function midBossHpOf(stage, level){
-  return Math.round(MID_BOSS_BASE * bossPowerScale(level || 1) * (1 + (stage-1)*0.05));
+  return Math.round(MID_BOSS_BASE * bossPowerScale(level || 1) * stagePowerOf(stage));
 }
 function bossHpOf(stage, level){ return Math.round(midBossHpOf(stage, level) * BOSS_MUL); }
 
@@ -2771,6 +2879,23 @@ class PlayerMissile {
     }
     this.x += Math.cos(this.ang)*this.spd*dt;
     this.y += Math.sin(this.ang)*this.spd*dt;
+
+    // 고스테이지 최종보스는 날아오는 미사일 일부를 보호막으로 흡수한다
+    if(!this.rolled && scene && scene.boss && scene.boss.absorb > 0 && !scene.boss.dead){
+      const b = scene.boss;
+      if(Math.hypot(b.x - this.x, b.y - this.y) < 190){
+        this.rolled = true;
+        if(Math.random() < b.absorb){
+          this.dead = true;
+          b.absorbT = 0.35;
+          const a = Math.atan2(this.y - b.y, this.x - b.x);
+          Particles.spawn(this.x, this.y, 8, { ang:a, spread:1.3, spd:400, life:0.3, size:PX*2,
+            pal:['#ffffff','#cfeaff','#9ad8ff','#2b5cff'] });
+          SND.sfx('ricochet');
+          return;
+        }
+      }
+    }
 
     // 굵은 화염 + 연기 궤적
     const bx = this.x - Math.cos(this.ang)*26, by = this.y - Math.sin(this.ang)*26;
@@ -3534,7 +3659,8 @@ const SKY_TEST = [
 const MAX_LIVES = 10;
 const BOMB_ITEM_INTERVAL = 16;      // 16초마다 필살기 구슬 등장
 const BOMB_ITEM_ROUNDS   = 3;       // 정기 투하 3회 + 최종보스 드롭 1개 = 1인당 총 4개
-const STAGE_TIME = 120;             // 스테이지 제한 시간 (초). 보스전이 길어져 90 -> 120
+const STAGE_TIME = 90;              // 중간보스가 나올 때까지의 제한 시간 (초).
+                                    // 보스가 등장하면 타이머는 멈춘다. 보스전은 시간제한 없이.
 const TIME_BAR = { x: 400, y: 16, w: 480, h: 26 };   // 상단 중앙 시간 게이지 (터치 시 일시정지)
 const P1_COLOR = '#8fd0ff', P2_COLOR = '#ffa8d0';
 
@@ -3560,7 +3686,9 @@ class GameScene extends Scene {
     this.scrollK = 1; this.camLead = 0;
 
     // --- 플레이어 ---
-    this.p1 = new Player(320, GAME_H/2 - 60, Save.data.level, Save.data.dragon|0, 1);
+    // 파이어 레벨은 절대 저장하지 않는다. 컨티뉴로 이어받을 때만 유지된다.
+    // 게임을 나가거나 게임오버가 나면 무조건 Lv1 부터 다시 시작.
+    this.p1 = new Player(320, GAME_H/2 - 60, 1, Save.data.dragon|0, 1);
     this.p2 = null;                 // 2P 는 게임 도중 WASD 로 난입
     // 컨티뉴로 넘어왔으면 하트/HP/불레벨/무기/드래곤을 그대로 이어받는다
     if(this.carry){
@@ -3702,20 +3830,21 @@ class GameScene extends Scene {
 
   onEnemyKilled(e){
     if(e instanceof MidBoss){
-      // 인원수만큼 (1인 1개 / 2인 2개)
-      const n = this.players().length;
-      for(let i=0;i<n;i++)
-        this.items.push(new Item(e.x, e.y + (i - (n-1)/2)*300, ITEM_KIND.POWER));
-      return;
-    }
-    if(e instanceof Boss){
-      // 인원수만큼 나눠 떨어뜨린다 (정기 투하 3회 + 보스 1개 = 1인당 4개)
+      // 파이어 레벨을 올릴 수 있는 유일한 기회. 하트도 여기서 준다.
+      // 인원수만큼 위아래로 벌려 사이좋게 하나씩 먹도록.
       const n = this.players().length;
       for(let i=0;i<n;i++){
         const dy = (i - (n-1)/2)*300;
-        this.items.push(new Item(e.x - 70, e.y + dy, ITEM_KIND.HEART));
-        this.items.push(new Item(e.x + 70, e.y + dy, ITEM_KIND.BOMB));
+        this.items.push(new Item(e.x - 80, e.y + dy, ITEM_KIND.POWER));
+        this.items.push(new Item(e.x + 80, e.y + dy, ITEM_KIND.HEART));
       }
+      return;
+    }
+    if(e instanceof Boss){
+      // 정기 투하 3회 + 최종보스 1개 = 1인당 필살기 4개
+      const n = this.players().length;
+      for(let i=0;i<n;i++)
+        this.items.push(new Item(e.x, e.y + (i - (n-1)/2)*300, ITEM_KIND.BOMB));
       return;
     }
     this.killStreak++;
@@ -3754,7 +3883,7 @@ class GameScene extends Scene {
   }
   confirmJoin(){
     this.joining = false;
-    this.p2 = new Player(320, GAME_H/2 + 90, Save.data.level, this.joinSel, 2);
+    this.p2 = new Player(320, GAME_H/2 + 90, 1, this.joinSel, 2);
     this.p2.lives = Math.max(1, this.p1.lives);      // 난입 시 1P 와 비슷한 잔기로 시작
     this.p2.missileCount = this.p1.missileCount;      // 난입 시 같은 수량으로 시작
     this.p2.bombCount = this.p1.bombCount;
@@ -3778,12 +3907,13 @@ class GameScene extends Scene {
       for(const p of this.allPlayers()) if(!p.out) p.lives = Math.min(MAX_LIVES, p.lives + 1);
       SND.sfx('fanfare');
       Save.data.unlocked = Math.max(Save.data.unlocked, Math.min(20, this.stage + 1));
-      this.levelUpReward = this.p1.level < MAX_LEVEL;
-      for(const p of this.allPlayers()) if(!p.out) p.setLevel(p.level + 1);
-      Save.data.level = this.p1.level;
+      // 클리어 보너스로 레벨을 주지 않는다.
+      // 파이어 레벨은 오직 중간보스가 떨어뜨리는 LvUp 으로만 오른다.
+      this.levelUpReward = false;
     }else{
       SND.sfx('gameover');
-      Save.data.level = this.p1.level;
+      // 파이어 레벨은 저장하지 않는다. 나가면 무조건 Lv1 부터 다시.
+
     }
     if(this.score > (Save.data.best[this.stage] || 0)) Save.data.best[this.stage] = this.score;
     Save.save();
@@ -3928,8 +4058,12 @@ class GameScene extends Scene {
     if(Freeze.t > 0){ Freeze.t -= dt; Flash.update(dt); return; }
 
     this.t += dt;
-    this.timeLeft -= dt;
-    if(this.timeLeft <= 0){ this.timeLeft = 0; this.finish('over', 'TIME UP'); return; }
+    // 중간보스가 등장하기 전까지만 시간이 흐른다.
+    // 보스전까지 90초로 묶으면 고스테이지에서 물리적으로 못 깬다.
+    if(!this.director.midSpawned){
+      this.timeLeft -= dt;
+      if(this.timeLeft <= 0){ this.timeLeft = 0; this.finish('over', 'TIME UP'); return; }
+    }
     if(this.finalBossKilled && this.bossDeathT <= 0){ this.finish('clear'); return; }
 
     // ---- 2P 난입 / 캐릭터 선택 ----
@@ -4036,9 +4170,11 @@ class GameScene extends Scene {
       if(p.hurtT > 0) continue;
       const hb = p.hitbox;
       let struck = false;
+      let dmg = 25;
       for(const list of [this.arrows, this.eshots, this.missiles, this.bombs]){
         for(const o of list){
           if(o.dead || !overlap(o.box, hb)) continue;
+          dmg = o.hurt || 25;                       // 보스 탄은 스테이지에 비례해 더 아프다
           if(o instanceof Bomb) o.explode(this); else o.dead = true;
           struck = true; break;
         }
@@ -4050,7 +4186,7 @@ class GameScene extends Scene {
         const d = Math.hypot(p.x - w.x, p.y - w.y);
         if(Math.abs(d - w.r) < 30){ w.hitDone = true; struck = true; break; }
       }
-      if(struck) this.hurtPlayer(p);
+      if(struck) this.hurtPlayer(p, dmg);
     }
 
     // ---- 정리 ----
@@ -4118,12 +4254,12 @@ class GameScene extends Scene {
       }
     }
   }
-  hurtPlayer(p){
+  hurtPlayer(p, dmg){
     if(p.out || p.shieldT > 0) return;
     p.hurtT = 1.1;
     Shake.add(10, 0.25);
     SND.sfx('hurt'); Input.rumble(0.9, 0.7, 260);
-    p.hp -= 25;
+    p.hp -= (dmg || 25);
     if(p.hp <= 0){
       p.lives = Math.max(0, p.lives - 1);
       p.setLevel(p.level - 1);
@@ -4372,7 +4508,7 @@ class GameScene extends Scene {
       const rows = clear
         ? [['SCORE', String(this.score)], ['TIME BONUS', '+' + this.bonus],
            ['KILLS', String(this.kills)],
-           ['FIRE LV', String(this.p1.level) + (this.levelUpReward ? '  -> ' + Save.data.level : '  MAX')],
+           ['FIRE LV', String(this.p1.level) + (this.p1.level >= MAX_LEVEL ? '  MAX' : '')],
            ['LIFE', String(this.totalLives()) + '  (+1)']]
         : [['SCORE', String(this.score)], ['KILLS', String(this.kills)],
            ['FIRE LV', String(this.p1.level)], ['TIME LEFT', Math.ceil(this.timeLeft) + 'S']];
@@ -5054,8 +5190,10 @@ class StageSelectScene extends Scene {
     const best = Save.data.best[this.sel+1] || 0;
     drawText(ctx, 'BEST ' + String(best).padStart(7,'0'), 1264, 668, 3,
       { align:'right', color:PAL.gold, outline:PAL.outline });
-    drawText(ctx, 'FIRE LV ' + Save.data.level + '   UNLOCKED ' + Save.data.unlocked + '/20',
+    drawText(ctx, 'FIRE LV STARTS AT 1 - RAISE IT BY BEATING MID-BOSSES',
       1264, 630, 2, { align:'right', color:'#8a7bb8' });
+    drawText(ctx, 'UNLOCKED ' + Save.data.unlocked + '/20',
+      1264, 606, 2, { align:'right', color:'#8a7bb8' });
     if(!Save.available)
       drawText(ctx, 'PROGRESS NOT SAVED - BROWSER STORAGE BLOCKED', 640, 606, 2,
         { align:'center', color:'#ff8a6a' });
