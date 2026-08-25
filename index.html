@@ -756,15 +756,20 @@ function drawGrid(ctx, grid, ox, oy, cols, cell, pal, flip, tint){
 
 /* 드래곤 1마리. cx,cy = 스프라이트 중심 / level = 불 레벨(성장 단계)
    레이어 : 날개(0~2) -> 몸통 -> 부착 파츠 -> 내려친 날개(W3) */
-function drawDragon(ctx, pal, level, cx, cy, pose, flip, tint){
+function drawDragon(ctx, pal, level, cx, cy, pose, flip, tint, always){
   const g = growthOf(level), f = FORMS[g.form], cell = g.cell;
   const ox = snap(cx - f.cols*cell/2), oy = snap(cy - f.rows*cell/2);
   const front = (pose === 3);
   if(!front) drawGrid(ctx, f.wings[pose], ox, oy, f.cols, cell, pal, flip, tint);
   drawGrid(ctx, f.body, ox, oy, f.cols, cell, pal, flip, tint);
-  for(const name of g.parts){
+  const drawn = {};
+  for(const name of g.parts){                       // 성장으로 붙는 파츠
     const layer = f.parts[name];
-    if(layer) drawGrid(ctx, layer, ox, oy, f.cols, cell, pal, flip, tint);
+    if(layer && !drawn[name]){ drawn[name] = 1; drawGrid(ctx, layer, ox, oy, f.cols, cell, pal, flip, tint); }
+  }
+  if(always) for(const name of always){             // 캐릭터 고유 파츠 (Lv1 부터 항상)
+    const layer = f.parts[name];
+    if(layer && !drawn[name]){ drawn[name] = 1; drawGrid(ctx, layer, ox, oy, f.cols, cell, pal, flip, tint); }
   }
   if(front) drawGrid(ctx, f.wings[pose], ox, oy, f.cols, cell, pal, flip, tint);
 }
@@ -867,7 +872,7 @@ class Player {
         const g = this.trail[this.trail.length - 1 - (i+1)*2];
         if(!g) continue;
         ctx.globalAlpha = (0.30 - i*0.09) * k;
-        drawDragon(ctx, NOVART_PAL, this.level, g.x, g.y, g.pose, false, '#6fb8ff');
+        drawDragon(ctx, currentDragon().pal, this.level, g.x, g.y, g.pose, false, '#6fb8ff');
       }
       ctx.globalAlpha = 1;
     }
@@ -876,12 +881,14 @@ class Player {
     if(this.growT > 0){
       const k = this.growT / 0.45;
       if(Math.floor(this.growT * 24) % 2 === 0){
-        drawDragon(ctx, NOVART_PAL, this.level, this.x, this.y + bob, pose, false, '#fff2c0');
+        const dg = currentDragon();
+        drawDragon(ctx, dg.pal, this.level, this.x, this.y + bob, pose, false, '#fff2c0', dg.always);
         return;
       }
       ctx.globalAlpha = 1;
     }
-    drawDragon(ctx, NOVART_PAL, this.level, this.x, this.y + bob, pose, false, null);
+    const dg = currentDragon();
+    drawDragon(ctx, dg.pal, this.level, this.x, this.y + bob, pose, false, null, dg.always);
   }
 }
 
@@ -892,7 +899,7 @@ class Player {
 /* ---------------- 저장 (localStorage. file:// 에서 막혀도 안전하게) ---------------- */
 const Save = {
   KEY: 'dragonstriker.save.v1',
-  data: { unlocked: 1, level: 1, best: {} },
+  data: { unlocked: 1, level: 1, dragon: 0, best: {} },
   load(){
     try{
       const j = localStorage.getItem(this.KEY);
@@ -900,10 +907,11 @@ const Save = {
     }catch(e){ /* 저장 불가 환경 - 메모리로만 진행 */ }
     this.data.unlocked = clamp(this.data.unlocked|0, 1, 20) || 1;
     this.data.level    = clamp(this.data.level|0, 1, MAX_LEVEL) || 1;
+    this.data.dragon   = clamp(this.data.dragon|0, 0, 9);
     if(!this.data.best) this.data.best = {};
   },
   save(){ try{ localStorage.setItem(this.KEY, JSON.stringify(this.data)); }catch(e){} },
-  clearAll(){ this.data = { unlocked:1, level:1, best:{} }; this.save(); }
+  clearAll(){ this.data = { unlocked:1, level:1, dragon:0, best:{} }; this.save(); }
 };
 
 /* ---------------- 스테이지 정의 ----------------
@@ -2669,7 +2677,7 @@ class TitleScene extends Scene {
       if(s.y > 460 || s.x > GAME_W + 40){ this.shoot = null; this.shootT = 4 + Math.random()*6; }
     }
 
-    if(!this.mgr.busy && (Input.pressed('confirm') || Input.taps > 0)) this.mgr.change(new StageSelectScene(Save.data.unlocked));
+    if(!this.mgr.busy && (Input.pressed('confirm') || Input.taps > 0)) this.mgr.change(new CharacterSelectScene());
   }
 
   render(ctx){
@@ -3468,6 +3476,195 @@ class GameScene extends Scene {
 }
 
 /* ==================================================================
+   Phase 8 : 10종 드래곤
+   몸통/날개 그리드는 공유하고 팔레트 + 고유 파츠(뿔/등가시)로 구분한다.
+   ================================================================== */
+function mkDragonPal(o){
+  return {
+    K: o.line, D: o.dark, M: o.mid, L: o.light, T: o.tail || o.wing,
+    E: o.eye,  H: o.eyeHi || '#ffffff', N: o.line,
+    G: o.horn, S: o.spike, C: o.claw || '#eae4f2', W: '#fff4f4',
+    P: o.armor || o.mid, w: o.wing, f: o.bone, k: mixHex(o.line, '#ffffff', 0.12)
+  };
+}
+
+const DRAGONS = [
+  { id:'NOVART',    theme:'BLACK / CRIMSON EYE', trait:'THE STARTER',       always:[],
+    pal: mkDragonPal({ line:'#0d0912', dark:'#241d33', mid:'#3a3050', light:'#544772',
+      wing:'#2e2743', bone:'#4a3d68', eye:'#ff2b3c', eyeHi:'#ffd9dc',
+      horn:'#b8a9d4', spike:'#8f7ec4' }) },
+
+  { id:'SOLARIS',   theme:'YELLOW / AMBER BELLY', trait:'BORN OF THE SUN',  always:[],
+    pal: mkDragonPal({ line:'#3a1c05', dark:'#a85f12', mid:'#d98b1c', light:'#ffc93c',
+      wing:'#b56a15', bone:'#e0952a', eye:'#ff5a1e', eyeHi:'#fff0c0',
+      horn:'#fff0b0', spike:'#ffae3a' }) },
+
+  { id:'AQUANTIS',  theme:'SKY / WHITE',          trait:'FINNED WINGS',     always:[],
+    pal: mkDragonPal({ line:'#0a2540', dark:'#1d5a86', mid:'#2f86b4', light:'#7fd0e8',
+      wing:'#2a6f9e', bone:'#4fa8cc', eye:'#d8f6ff', eyeHi:'#ffffff',
+      horn:'#eaffff', spike:'#9fe4f4' }) },
+
+  { id:'FORESTIA',  theme:'GREEN / LEAF',         trait:'LEAF PATTERNED',   always:[],
+    pal: mkDragonPal({ line:'#0d2410', dark:'#245c26', mid:'#3d8a34', light:'#8fd44a',
+      wing:'#2c6b2a', bone:'#57a83e', eye:'#ffe14a', eyeHi:'#fffbe0',
+      horn:'#d8f0a0', spike:'#a8d860' }) },
+
+  { id:'CRIMSONDE', theme:'SCARLET / BLACK',      trait:'TWIN HORNS',       always:['crest'],
+    pal: mkDragonPal({ line:'#14040a', dark:'#6b0f22', mid:'#a3162e', light:'#d93a44',
+      wing:'#4a0a18', bone:'#7d1526', eye:'#ffd24a', eyeHi:'#fffbe0',
+      horn:'#ffd0c0', spike:'#ff6a4a' }) },
+
+  { id:'FROSTWING', theme:'WHITE / BLUE',         trait:'FROSTED WINGS',    always:[],
+    pal: mkDragonPal({ line:'#0e2440', dark:'#6f93b8', mid:'#a8c8e0', light:'#e8f6ff',
+      wing:'#7fa8cc', bone:'#b8d8f0', eye:'#4fd0ff', eyeHi:'#ffffff',
+      horn:'#ffffff', spike:'#cfeaff' }) },
+
+  { id:'VOLTTAIL',  theme:'VIOLET / YELLOW',      trait:'LIGHTNING TAIL',   always:['ridge'],
+    pal: mkDragonPal({ line:'#150829', dark:'#45208a', mid:'#6a35b8', light:'#9a5fe0',
+      wing:'#3a1a70', bone:'#7a45c0', eye:'#ffe14a', eyeHi:'#fffbe0',
+      horn:'#ffe14a', spike:'#ffd24a' }) },
+
+  { id:'SANDSCALE', theme:'SAND / BROWN',         trait:'SPINED BACK',      always:['ridge'],
+    pal: mkDragonPal({ line:'#2a1a08', dark:'#8a6a34', mid:'#b8934a', light:'#e0c078',
+      wing:'#6b4f26', bone:'#a07a3a', eye:'#ff9a3a', eyeHi:'#ffe8c0',
+      horn:'#f0dcb0', spike:'#c9a05a' }) },
+
+  { id:'SHADOWFEN', theme:'NAVY / SILVER',        trait:'SILVER EYES',      always:[],
+    pal: mkDragonPal({ line:'#05060f', dark:'#141a3a', mid:'#232c56', light:'#3a4578',
+      wing:'#101632', bone:'#2b3560', eye:'#e0e8f8', eyeHi:'#ffffff',
+      horn:'#c8d0e0', spike:'#9aa8c8' }) },
+
+  { id:'GOLDREX',   theme:'GOLD / WHITE',         trait:'THE LEGEND',       always:['crest','ridge'],
+    pal: mkDragonPal({ line:'#3a2a05', dark:'#a8801a', mid:'#d9a92c', light:'#ffe07a',
+      wing:'#b8891f', bone:'#e8c04a', eye:'#ffffff', eyeHi:'#fffbe0',
+      horn:'#fffbe0', spike:'#ffe8a0', armor:'#fff0b0' }) }
+];
+
+function currentDragon(){ return DRAGONS[clamp(Save.data.dragon | 0, 0, DRAGONS.length - 1)]; }
+
+/* ==================================================================
+   CharacterSelectScene
+   ================================================================== */
+class CharacterSelectScene extends Scene {
+  constructor(){ super(); this.sel = 0; }
+  enter(){
+    this.t = 0;
+    this.sel = clamp(Save.data.dragon | 0, 0, 9);
+    this.pop = 0;                       // 선택 전환 시 확대 애니메이션
+    this.bg = buildSky([{p:0,c:'#0b0818'},{p:.45,c:'#181031'},{p:.8,c:'#33184a'},{p:1,c:'#5a2450'}]);
+    // 하단 썸네일 (FORM A 를 작게 1회만 구움)
+    this.portraits = DRAGONS.map(d => {
+      const f = FORMS.A, cell = 2.6;
+      const { cv, c } = makeCanvas(Math.round(f.cols*cell), Math.round(f.rows*cell));
+      drawGrid(c, f.wings[2], 0, 0, f.cols, cell, d.pal, false, null);
+      drawGrid(c, f.body,     0, 0, f.cols, cell, d.pal, false, null);
+      for(const nm of d.always) if(f.parts[nm]) drawGrid(c, f.parts[nm], 0, 0, f.cols, cell, d.pal, false, null);
+      return cv;
+    });
+    this.stars = [];
+    const rnd = mulberry32(51);
+    for(let i=0;i<90;i++)
+      this.stars.push({ x:snap(rnd()*GAME_W), y:snap(rnd()*420), s:rnd()>0.85?PX*2:PX,
+                        ph:rnd()*6.3, sp:1+rnd()*2.6 });
+    Input.pointerHandler = {
+      down:(id,x,y) => {
+        for(let i=0;i<10;i++){
+          const r = this.slotRect(i);
+          if(x>=r.x && x<=r.x+r.w && y>=r.y && y<=r.y+r.h){
+            if(i === this.sel) this.confirm(); else this.move(i);
+            return;
+          }
+        }
+        this.confirm();
+      }
+    };
+  }
+  exit(){ Input.pointerHandler = null; }
+
+  slotRect(i){ return { x: 96 + i*112, y: 556, w: 96, h: 84 }; }
+  move(i){ if(i === this.sel) return; this.sel = i; this.pop = 1; }
+  confirm(){
+    if(this.mgr.busy) return;
+    Save.data.dragon = this.sel; Save.save();
+    this.mgr.change(new StageSelectScene(Save.data.unlocked));
+  }
+
+  update(dt){
+    this.t += dt;
+    if(this.pop > 0) this.pop = Math.max(0, this.pop - dt*3.4);
+    if(this.mgr.busy) return;
+    if(Input.pressed('left'))  this.move((this.sel + 9) % 10);
+    if(Input.pressed('right')) this.move((this.sel + 1) % 10);
+    if(Input.pressed('up'))    this.move((this.sel + 5) % 10);
+    if(Input.pressed('down'))  this.move((this.sel + 5) % 10);
+    if(Input.pressed('confirm')) this.confirm();
+    if(Input.pressed('back') || Input.pressed('pause')) this.mgr.change(new TitleScene());
+  }
+
+  render(ctx){
+    ctx.drawImage(this.bg, 0, 0);
+    for(const st of this.stars){
+      ctx.globalAlpha = 0.3 + 0.7*(0.5 + 0.5*Math.sin(this.t*st.sp + st.ph));
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(st.x, st.y, st.s, st.s);
+    }
+    ctx.globalAlpha = 1;
+
+    const d = DRAGONS[this.sel];
+    drawText(ctx, 'SELECT DRAGON', 640, 34, 6,
+      { align:'center', color:(r)=>PAL.fire[r], outline:PAL.outline, shadow:'#000', shadowOff:7 });
+
+    // ---- 가운데 큰 드래곤 (전환 시 확대 -> 원래대로) ----
+    const f = FORMS.B;
+    const bounce = 1 + this.pop*0.22;
+    const cell = 7 * bounce;
+    const cx = 640, cy = 300 + snap(Math.sin(this.t*2.2)*5);
+    const ox = snap(cx - f.cols*cell/2), oy = snap(cy - f.rows*cell/2);
+    const pose = FLY_SEQ[(this.t / 0.13 | 0) % FLY_SEQ.length];
+    // 뒤쪽 광배
+    ctx.globalAlpha = 0.16 + Math.sin(this.t*3)*0.05;
+    fillPixelCircle(ctx, cx, cy + 20, 210, d.pal.M);
+    ctx.globalAlpha = 1;
+    if(pose !== 3) drawGrid(ctx, f.wings[pose], ox, oy, f.cols, cell, d.pal, false, null);
+    drawGrid(ctx, f.body, ox, oy, f.cols, cell, d.pal, false, null);
+    for(const nm of d.always) if(f.parts[nm]) drawGrid(ctx, f.parts[nm], ox, oy, f.cols, cell, d.pal, false, null);
+    if(pose === 3) drawGrid(ctx, f.wings[pose], ox, oy, f.cols, cell, d.pal, false, null);
+
+    // ---- 이름 / 설명 ----
+    drawText(ctx, d.id, 640, 452, 8,
+      { align:'center', color:(r)=>PAL.fire[r], outline:PAL.outline, shadow:'#000', shadowOff:8 });
+    drawText(ctx, d.theme, 640, 512, 3, { align:'center', color:'#cfe0ff', shadow:'#0a1830' });
+    drawText(ctx, d.trait, 640, 534, 2, { align:'center', color:PAL.gold });
+    drawText(ctx, String(this.sel+1).padStart(2,'0') + ' / 10', 1252, 34, 3,
+      { align:'right', color:PAL.gold, outline:PAL.outline });
+
+    // ---- 하단 10칸 ----
+    for(let i=0;i<10;i++){
+      const r = this.slotRect(i), on = i === this.sel, dd = DRAGONS[i];
+      ctx.fillStyle = on ? PAL.gold : '#241c3e';
+      ctx.fillRect(r.x - PX, r.y - PX, r.w + PX*2, r.h + PX*2);
+      ctx.fillStyle = on ? '#2a2140' : '#120d24';
+      ctx.fillRect(r.x, r.y, r.w, r.h);
+      const pt = this.portraits[i];
+      ctx.globalAlpha = on ? 1 : 0.6;
+      ctx.drawImage(pt, snap(r.x + (r.w - pt.width)/2), snap(r.y + (r.h - pt.height)/2 + 4));
+      ctx.globalAlpha = 1;
+      // 색 테마 띠
+      ctx.fillStyle = dd.pal.M; ctx.fillRect(r.x, r.y + r.h - 6, r.w, 6);
+      if(on){
+        const g = PX + Math.round(Math.sin(this.t*7))*PX;
+        ctx.strokeStyle = PAL.gold; ctx.lineWidth = 2;
+        ctx.strokeRect(r.x - PX - g, r.y - PX - g, r.w + (PX+g)*2, r.h + (PX+g)*2);
+        drawText(ctx, 'V', r.x + r.w/2, r.y - 26, 3, { align:'center', color:PAL.gold });
+      }
+    }
+
+    drawText(ctx, 'ARROWS: SELECT    ENTER: OK    ESC: TITLE', 640, 676, 2,
+      { align:'center', color:'#8a7bb8' });
+    if(DEBUG) drawHUDDebug(ctx);
+  }
+}
+
+/* ==================================================================
    StageSelectScene : 20 스테이지 선택 / 해금
    ================================================================== */
 const SEL = { cols:5, rows:4, tw:192, th:108, gx:224, gy:132, ox:96, oy:150 };
@@ -3514,7 +3711,7 @@ class StageSelectScene extends Scene {
     if(Input.pressed('up'))    this.sel = ((r + SEL.rows - 1) % SEL.rows)*SEL.cols + c;
     if(Input.pressed('down'))  this.sel = ((r + 1) % SEL.rows)*SEL.cols + c;
     if(Input.pressed('confirm')) this.launch();
-    if(Input.pressed('back') || Input.pressed('pause')) this.mgr.change(new TitleScene());
+    if(Input.pressed('back') || Input.pressed('pause')) this.mgr.change(new CharacterSelectScene());
   }
 
   render(ctx){
@@ -3570,7 +3767,9 @@ class StageSelectScene extends Scene {
       { align:'right', color:PAL.gold, outline:PAL.outline });
     drawText(ctx, 'FIRE LV ' + Save.data.level + '   UNLOCKED ' + Save.data.unlocked + '/20',
       1264, 630, 2, { align:'right', color:'#8a7bb8' });
-    drawText(ctx, 'ARROWS: MOVE    ENTER: START    ESC: TITLE', 24, 630, 2, { color:'#8a7bb8' });
+    drawText(ctx, 'ARROWS: MOVE    ENTER: START    ESC: DRAGON', 24, 630, 2, { color:'#8a7bb8' });
+    drawText(ctx, 'DRAGON: ' + currentDragon().id, 640, 630, 2,
+      { align:'center', color:currentDragon().pal.L });
 
     if(this.denyT > 0)
       drawText(ctx, 'LOCKED', 640, 350, 8,
