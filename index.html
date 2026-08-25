@@ -1597,16 +1597,16 @@ class Boom {
 const FIRE_INTERVAL = 0.06;                  // 초당 16.7발 (더 촘촘하게)
 /* 레벨별 : n=갈래수 th=두께 dmg=데미지 spd=속도 pierce=관통수 len=길이 spread=확산(px/s) */
 const FIRE = [ null,
-  { n:1, th: 26, dmg: 22, spd:1500, pierce:0,  len:100, spread: 0  },  // Lv1  기본부터 굵고 빠르게
-  { n:1, th: 30, dmg: 27, spd:1500, pierce:0,  len:108, spread: 0  },  // Lv2
-  { n:2, th: 34, dmg: 25, spd:1520, pierce:0,  len:116, spread:40  },  // Lv3  2줄로 갈라짐
-  { n:2, th: 38, dmg: 30, spd:1520, pierce:0,  len:124, spread:46  },  // Lv4
-  { n:3, th: 46, dmg: 36, spd:1560, pierce:1,  len:134, spread:64  },  // Lv5  굵은 1줄 + 확산
-  { n:3, th: 52, dmg: 42, spd:1560, pierce:1,  len:144, spread:70  },  // Lv6
-  { n:1, th: 64, dmg:140, spd:1620, pierce:3,  len:168, spread: 0  },  // Lv7  화염 기둥 (관통)
-  { n:1, th: 76, dmg:165, spd:1620, pierce:4,  len:186, spread: 0  },  // Lv8
-  { n:1, th: 90, dmg:195, spd:1700, pierce:6,  len:210, spread: 0  },  // Lv9
-  { n:1, th:116, dmg:250, spd:1800, pierce:99, len:264, spread: 0  }   // Lv10 거대 화염포
+  { n:1, th: 26, dmg: 11, spd:1500, pierce:0,  len:100, spread:  0 },  // Lv1  한 줄
+  { n:1, th: 30, dmg: 14, spd:1500, pierce:0,  len:108, spread:  0 },  // Lv2
+  { n:2, th: 30, dmg: 13, spd:1520, pierce:0,  len:112, spread: 42 },  // Lv3  두 줄
+  { n:2, th: 34, dmg: 15, spd:1520, pierce:0,  len:120, spread: 48 },  // Lv4
+  { n:3, th: 36, dmg: 18, spd:1560, pierce:1,  len:126, spread:100 },  // Lv5  세 줄
+  { n:3, th: 40, dmg: 21, spd:1560, pierce:1,  len:134, spread:112 },  // Lv6
+  { n:4, th: 44, dmg: 18, spd:1620, pierce:3,  len:146, spread:170 },  // Lv7  네 줄 (관통)
+  { n:4, th: 48, dmg: 21, spd:1620, pierce:4,  len:158, spread:195 },  // Lv8
+  { n:5, th: 52, dmg: 20, spd:1700, pierce:6,  len:172, spread:235 },  // Lv9  다섯 줄
+  { n:6, th: 58, dmg: 21, spd:1800, pierce:99, len:190, spread:285 }   // Lv10 여섯 줄 (전탄 관통)
 ];
 
 class FireBolt {
@@ -1627,7 +1627,10 @@ class FireBolt {
     if(this.x - this.len > GAME_W + 40 || this.y < -80 || this.y > GAME_H + 80) this.dead = true;
   }
   render(ctx){
-    const L = this.len, T = this.th, seg = 8;
+    // 화면 밖은 그리지 않는다 (고레벨에서 불줄기가 70개 넘게 깔린다)
+    if(this.x < -20 || this.x - this.len > GAME_W + 20) return;
+    if(this.y < -80 || this.y > GAME_H + 80) return;
+    const L = this.len, T = this.th, seg = 18;   // 도트 단위를 키워 드로우 수를 크게 줄임
     const x0 = snap(this.x - L);
     for(let sx=0; sx<L; sx+=seg){
       const t = sx / L;                                        // 0=꼬리, 1=머리
@@ -2210,6 +2213,7 @@ class Boss extends EnemyBase {
     this.enraged = false;
     this.swirlN = 0; this.swirlT = 0; this.swirlA = 0;
     this.wallN = 0; this.wallT = 0;
+    this.stageNo = stage;
     this.pal = bossPalOf(stage);                 // 스테이지 테마색 연동
   }
   get box(){ return { x:this.x - 144, y:this.y - 125, w:288, h:250 }; }
@@ -2305,7 +2309,8 @@ class Boss extends EnemyBase {
         this.y = this.homeY + Math.sin(this.t*0.9)*34;
         if(this.pt > 0.4 && !this.fired){
           this.fired = true;
-          const n = (this.enraged ? 6 : 4) + Math.floor(Math.random()*3);
+          const n = Math.min(14, Math.round(((this.enraged ? 6 : 4) + Math.floor(Math.random()*3))
+                                             * enemyScale(this.stageNo || 1)));
           for(let i=0;i<n;i++)
             scene.enemies.push(new WingZombie(this.x - 40 + i*30,
               clamp(this.y - 130 + i*52, 110, 610), 250 + Math.random()*80));
@@ -2352,6 +2357,11 @@ const TIMELINE = [
   { t:41.0, k:'zombie', n:5 }, { t:43.0, k:'heavy',  n:1 },
   { t:40.0, k:'midboss' }
 ];
+/* 스테이지가 오를수록 적이 20% 씩 늘어난다 (화면이 꽉 차도록).
+   다만 무한정 늘리면 프레임이 무너지므로 배율과 동시 등장 수에 상한을 둔다. */
+function enemyScale(stage){ return Math.min(6, Math.pow(1.2, (stage|0) - 1)); }
+const MAX_ALIVE_ENEMIES = 80;
+
 const BOSS_FORCE_T = 64;        // 이 시각이 되면 중간보스 상태와 무관하게 최종보스 등장
 const BOSS_AFTER_MID = 6;       // 중간보스 처치 후 대기 시간
 
@@ -2378,10 +2388,16 @@ class Director {
   }
   spawnGroup(kind, n){
     const s = this.s;
+    n = Math.max(1, Math.round(n * enemyScale(this.stage)));
+    if(s.enemies.length >= MAX_ALIVE_ENEMIES) return;          // 과부하 방지
+    n = Math.min(n, MAX_ALIVE_ENEMIES - s.enemies.length);
     const y0 = 150 + Math.random()*380;
+    // 수가 많아지면 여러 줄로 나눠서 화면을 채운다
+    const perCol = Math.max(1, Math.ceil(n / Math.ceil(n/6)));
     for(let i=0;i<n;i++){
-      const y = clamp(y0 + (i - n/2)*58, 110, 610);
-      const x = GAME_W + 80 + i*78;
+      const col = (i / perCol) | 0, row = i % perCol;
+      const y = clamp(y0 + (row - perCol/2)*58 + (col%2)*29, 110, 610);
+      const x = GAME_W + 80 + col*96 + (row%2)*34;
       if(kind === 'zombie')     s.enemies.push(new WingZombie(x, y, 160 + Math.random()*70));
       else if(kind === 'rider') s.enemies.push(new DragonRider(x, y));
       else if(kind === 'heavy') s.enemies.push(new HeavyRider(x, y));
@@ -2424,7 +2440,9 @@ function fireDpsOf(level){
 }
 function bossPowerScale(level){ return Math.pow(fireDpsOf(level) / fireDpsOf(1), 0.8); }
 
-const MID_BOSS_BASE = 6600, BOSS_MUL = 2.4;   // 미사일 6회 발사(누적 45발) 분량
+// 불 화력을 절반으로 낮췄으므로 보스 기준 체력도 같이 내린다.
+// (이 값이 그대로면 보스전 시간이 2배가 되어 제한시간 안에 못 잡는다)
+const MID_BOSS_BASE = 3200, BOSS_MUL = 2.4;
 function midBossHpOf(stage, level){
   return Math.round(MID_BOSS_BASE * bossPowerScale(level || 1) * (1 + (stage-1)*0.05));
 }
@@ -2435,7 +2453,8 @@ function bossHpOf(stage, level){ return Math.round(midBossHpOf(stage, level) * B
    같은 데미지로 최종보스는 6회 발사(누적 45발) 분량이 된다. */
 const MISSILE_VOLLEYS_TO_KILL_MID = 3;
 function missileDamageOf(stage, level){
-  return midBossHpOf(stage, level) / 18;
+  // 1회 발사가 3발(연속 시 6/9발)이라 한 방이 너무 강했다. 기존의 1/3 로 낮춤
+  return midBossHpOf(stage, level) / 54;
 }
 
 const MISSILE = {
@@ -3351,7 +3370,9 @@ class GameScene extends Scene {
       this.lives = Math.min(MAX_LIVES, this.lives + 1);      // 클리어 보상 하트 +1
       SND.sfx('fanfare');
       Save.data.unlocked = Math.max(Save.data.unlocked, Math.min(20, this.stage + 1));
-      Save.data.level = this.player.level;                   // 불 레벨은 다음 스테이지로 유지
+      // 적이 스테이지마다 늘어나므로 주인공도 클리어할 때마다 무조건 한 단계 강해진다
+      this.levelUpReward = this.player.level < MAX_LEVEL;
+      Save.data.level = clamp(this.player.level + 1, 1, MAX_LEVEL);
     }else{
       SND.sfx('gameover');
       Save.data.level = this.player.level;                   // 죽어서 내려간 레벨도 반영
@@ -3418,14 +3439,14 @@ class GameScene extends Scene {
     if(this.fireT <= 0){
       this.fireT += FIRE_INTERVAL;
       const m = this.muzzle();
-      if(c.n === 1) this.bolts.push(new FireBolt(m.x, m.y, 0, lv));
-      else if(c.n === 2){
-        this.bolts.push(new FireBolt(m.x, m.y - 9, -c.spread, lv));
-        this.bolts.push(new FireBolt(m.x, m.y + 9,  c.spread, lv));
-      }else{
+      if(c.n === 1){
         this.bolts.push(new FireBolt(m.x, m.y, 0, lv));
-        this.bolts.push(new FireBolt(m.x, m.y, -c.spread, lv));
-        this.bolts.push(new FireBolt(m.x, m.y,  c.spread, lv));
+      }else{
+        // 갈래를 위아래로 고르게 부채꼴로 펼친다 (레벨이 오를수록 갈래가 늘어남)
+        for(let i=0;i<c.n;i++){
+          const k = (i/(c.n-1) - 0.5) * 2;            // -1 ~ +1
+          this.bolts.push(new FireBolt(m.x, m.y + k*(12 + c.n*4), k*c.spread, lv));
+        }
       }
       Particles.spawn(m.x, m.y, 2, { ang:0, spread:0.9, spd:210, life:0.16, grav:0, drag:5 });
       SND.sfx('fire', lv);
@@ -3827,7 +3848,8 @@ class GameScene extends Scene {
     if(this.stateT > 0.6){
       const rows = clear
         ? [['SCORE', String(this.score)], ['TIME BONUS', '+' + this.bonus],
-           ['KILLS', String(this.kills)], ['FIRE LV', String(this.player.level)],
+           ['KILLS', String(this.kills)],
+           ['FIRE LV', String(this.player.level) + (this.levelUpReward ? '  -> ' + Save.data.level : '  MAX')],
            ['LIFE', String(this.lives) + '  (+1)']]
         : [['SCORE', String(this.score)], ['KILLS', String(this.kills)],
            ['FIRE LV', String(this.player.level)], ['TIME LEFT', Math.ceil(this.timeLeft) + 'S']];
