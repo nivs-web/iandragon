@@ -528,19 +528,74 @@ const SND = {
 /* ==================================================================
    입력 시스템 (키보드 / 터치 / 게임패드 최소 지원)
    ================================================================== */
+/* 키 식별 : 환경마다 keydown 이벤트가 주는 정보가 달라서 3단계로 해석한다.
+   - e.code   : 물리 키 위치. 한글/영문 어느 상태여도 동일 (있으면 이게 최선)
+   - e.key    : 안드로이드 OTG 키보드 등에서 code 가 비어 오는 경우 대비
+   - e.keyCode: 위 둘이 모두 없을 때의 마지막 수단
+   안드로이드 크롬 + OTG 키보드에서 Q/E/F 가 안 먹던 원인이 code 누락이었다. */
+const KEYCODE_TO_CODE = {
+  8:'Backspace', 9:'Tab', 13:'Enter', 16:'ShiftLeft', 27:'Escape', 32:'Space',
+  37:'ArrowLeft', 38:'ArrowUp', 39:'ArrowRight', 40:'ArrowDown',
+  48:'Digit0', 49:'Digit1', 50:'Digit2', 51:'Digit3',
+  65:'KeyA', 66:'KeyB', 68:'KeyD', 69:'KeyE', 70:'KeyF', 77:'KeyM',
+  80:'KeyP', 81:'KeyQ', 83:'KeyS', 87:'KeyW', 88:'KeyX', 90:'KeyZ',
+  114:'F3', 192:'Backquote', 219:'BracketLeft', 221:'BracketRight'
+};
+const KEYNAME_TO_CODE = {
+  arrowleft:'ArrowLeft', arrowright:'ArrowRight', arrowup:'ArrowUp', arrowdown:'ArrowDown',
+  escape:'Escape', esc:'Escape', enter:'Enter', ' ':'Space', spacebar:'Space',
+  backspace:'Backspace', tab:'Tab',
+  q:'KeyQ', e:'KeyE', f:'KeyF', m:'KeyM', p:'KeyP', x:'KeyX', z:'KeyZ',
+  w:'KeyW', a:'KeyA', s:'KeyS', d:'KeyD',
+  '`':'Backquote', '~':'Backquote', '1':'Digit1', '!':'Digit1',
+  '[':'BracketLeft', ']':'BracketRight',
+  alt:'AltRight', altgraph:'AltRight', control:'ControlRight', ctrl:'ControlRight'
+};
+function resolveKeyCode(e){
+  // Alt / Control 은 좌우를 구분해야 하므로 location 을 먼저 본다
+  const kc = e.keyCode || e.which || 0;
+  if(kc === 18 || e.key === 'Alt' || e.key === 'AltGraph')
+    return e.location === 1 ? 'AltLeft' : 'AltRight';
+  if(kc === 17 || e.key === 'Control')
+    return e.location === 1 ? 'ControlLeft' : 'ControlRight';
+  const c = e.code;
+  if(c && c !== 'Unidentified' && c !== '') return c;
+  const k = (e.key || '').toLowerCase();
+  if(KEYNAME_TO_CODE[k]) return KEYNAME_TO_CODE[k];
+  if(KEYCODE_TO_CODE[kc]) return KEYCODE_TO_CODE[kc];
+  return '';
+}
+
+/* ==================================================================
+   입력 시스템 (키보드 2인 / 터치 / 게임패드)
+   1P : 방향키 + 오른쪽 Alt(미사일) + 오른쪽 Ctrl(필살기)
+   2P : WASD + ` (미사일) + 1 (필살기)
+   ================================================================== */
 const Input = {
   down: new Set(),      // 눌린 상태
   just: new Set(),      // 이번 프레임에 눌림
+  /* 키 하나가 여러 동작에 대응할 수 있다 (메뉴 공용 + 플레이어별) */
   KEYMAP: {
-    ArrowUp:'up', KeyW:'up', ArrowDown:'down', KeyS:'down',
-    ArrowLeft:'left', KeyA:'left', ArrowRight:'right', KeyD:'right',
-    Enter:'confirm', NumpadEnter:'confirm', Space:'confirm', KeyZ:'confirm',
-    Escape:'pause', KeyP:'pause', Backspace:'back', KeyX:'back',
-    KeyQ:'missile', KeyE:'bomb', F3:'debug',
-    BracketRight:'lvup', BracketLeft:'lvdown', KeyM:'mute', KeyF:'fullscreen'
+    ArrowUp:   ['up','p1up'],    ArrowDown:  ['down','p1down'],
+    ArrowLeft: ['left','p1left'],ArrowRight: ['right','p1right'],
+    KeyW: ['up','p2up','p2join'],   KeyS: ['down','p2down','p2join'],
+    KeyA: ['left','p2left','p2join'],KeyD: ['right','p2right','p2join'],
+    Enter:['confirm'], NumpadEnter:['confirm'], Space:['confirm'], KeyZ:['confirm'],
+    Escape:['pause'], KeyP:['pause'], Backspace:['back'], KeyX:['back'],
+    AltRight:    ['p1missile'], ControlRight:['p1bomb'],
+    AltLeft:     ['p1missile'], ControlLeft: ['p1bomb'],
+    KeyQ:['p1missile'], KeyE:['p1bomb'],          // PC 편의를 위한 별칭
+    Backquote:['p2missile'], Digit1:['p2bomb'],
+    BracketRight:['lvup'], BracketLeft:['lvdown'],
+    KeyM:['mute'], KeyF:['fullscreen'], F3:['debug']
   },
   _pad:{ confirm:false, back:false, missile:false, bomb:false },
+  padAxis:{ x:0, y:0 },        // 게임패드 왼쪽 스틱
   padName: null, _padRef: null,
+  taps: 0,                     // 이번 프레임 탭 횟수 (타이틀용)
+  pointerHandler: null,        // 씬이 등록하는 포인터 핸들러 {down,move,up}
+  lastKey: '',                 // 디버그용 : 마지막으로 인식한 키
+
   /* 게임패드 진동 (지원하지 않는 패드에서는 조용히 무시) */
   rumble(strong, weak, ms){
     const p = this._padRef;
@@ -553,25 +608,25 @@ const Input = {
         p.hapticActuators[0].pulse(strong, ms|0);
     }catch(e){}
   },
-  padAxis:{ x:0, y:0 },        // 게임패드 왼쪽 스틱
-  taps: 0,                     // 이번 프레임 탭 횟수 (타이틀용)
-  pointerHandler: null,        // 씬이 등록하는 포인터 핸들러 {down,move,up}
 
   init(canvas){
     addEventListener('keydown', e => {
       SND.resume();                       // 자동재생 정책상 첫 입력에서 오디오 활성화
-      const a = this.KEYMAP[e.code];
-      if(a === 'mute' && !e.repeat){ SND.setBgmOn(!SND.bgmOn); SND.setSfxOn(SND.bgmOn); }
+      const code = resolveKeyCode(e);
+      this.lastKey = code || ('?' + (e.keyCode||0));
+      const acts = this.KEYMAP[code];
+      if(!acts) return;
+      if(acts.indexOf('mute') >= 0 && !e.repeat){ SND.setBgmOn(!SND.bgmOn); SND.setSfxOn(SND.bgmOn); }
       // 전체화면은 반드시 이 이벤트 핸들러 안에서 직접 호출해야 브라우저가 허용한다
-      if(a === 'fullscreen' && !e.repeat){ e.preventDefault(); toggleFullscreen(); return; }
-      if(!a) return;
-      if(e.code === 'Space' || e.code === 'Backspace' || e.code.startsWith('Arrow') || e.code === 'F3') e.preventDefault();
+      if(acts.indexOf('fullscreen') >= 0 && !e.repeat){ e.preventDefault(); toggleFullscreen(); return; }
+      // 브라우저 기본 동작(스크롤, 메뉴, 백스페이스 뒤로가기)을 막는다
+      e.preventDefault();
       if(e.repeat) return;
-      this.down.add(a); this.just.add(a);
+      for(const a of acts){ this.down.add(a); this.just.add(a); }
     });
     addEventListener('keyup', e => {
-      const a = this.KEYMAP[e.code];
-      if(a) this.down.delete(a);
+      const acts = this.KEYMAP[resolveKeyCode(e)];
+      if(acts) for(const a of acts) this.down.delete(a);
     });
     addEventListener('blur', () => { this.down.clear(); this.just.clear(); });
 
@@ -610,8 +665,8 @@ const Input = {
       const msl = b(4), bmb = b(5);                    // LB / RB
       if(conf && !this._pad.confirm) this.just.add('confirm');
       if(back && !this._pad.back)    this.just.add('back');
-      if(msl  && !this._pad.missile) this.just.add('missile');
-      if(bmb  && !this._pad.bomb)    this.just.add('bomb');
+      if(msl  && !this._pad.missile) this.just.add('p1missile');
+      if(bmb  && !this._pad.bomb)    this.just.add('p1bomb');
       this._pad.confirm = conf; this._pad.back = back;
       this._pad.missile = msl;   this._pad.bomb = bmb;
 
@@ -630,17 +685,20 @@ const Input = {
     this._padRef = null; this.padName = null;
     this.padAxis.x = this.padAxis.y = 0;
   },
-  /* 키보드 + 게임패드 이동 벡터 (대각선 정규화) */
-  moveVector(){
+  /* 플레이어별 이동 벡터 (대각선 정규화). pid 1=방향키, 2=WASD */
+  moveVectorFor(pid){
+    const pre = pid === 2 ? 'p2' : 'p1';
     let x = 0, y = 0;
-    if(this.held('left'))  x -= 1;
-    if(this.held('right')) x += 1;
-    if(this.held('up'))    y -= 1;
-    if(this.held('down'))  y += 1;
+    if(this.held(pre+'left'))  x -= 1;
+    if(this.held(pre+'right')) x += 1;
+    if(this.held(pre+'up'))    y -= 1;
+    if(this.held(pre+'down'))  y += 1;
     if(x || y){ const d = Math.hypot(x,y); return { x:x/d, y:y/d }; }
-    if(this.padAxis.x || this.padAxis.y) return { x:this.padAxis.x, y:this.padAxis.y };
+    if(pid !== 2 && (this.padAxis.x || this.padAxis.y))
+      return { x:this.padAxis.x, y:this.padAxis.y };
     return { x:0, y:0 };
   },
+  moveVector(){ return this.moveVectorFor(1); },
   held(a){ return this.down.has(a); },
   pressed(a){ return this.just.has(a); },
   endFrame(){ this.just.clear(); this.taps = 0; }
@@ -1128,7 +1186,7 @@ const FLY_SEQ  = [0,1,2,3,2,1];
 const IDLE_SEQ = [2,1];
 
 class Player {
-  constructor(x, y, level){
+  constructor(x, y, level, dragonIdx, pid){
     this.x = x; this.y = y;
     this.vx = 0; this.vy = 0;
     this.animT = 0; this.animI = 0;
@@ -1138,6 +1196,18 @@ class Player {
     this.growT = 0;               // 레벨업 연출 타이머
     this.pose = 2;
     this.trail = [];              // 잔상용 위치 궤적
+    // --- 플레이어별 상태 (2인 플레이용) ---
+    this.pid = pid || 1;
+    this.dragonIdx = clamp(dragonIdx === undefined ? (Save.data.dragon|0) : dragonIdx, 0, 9);
+    this.hp = 100; this.hurtT = 0;
+    this.missileCount = 0; this.bombCount = 0;
+    this.combo = 0; this.comboT = 0; this.fireT = 0;
+  }
+  get dragon(){ return DRAGONS[this.dragonIdx]; }
+  /* 입 끝 (불이 나오는 지점) */
+  get muzzle(){
+    const g = growthOf(this.level), f = FORMS[g.form];
+    return { x: this.x + f.muzzle.x*g.cell, y: this.y + f.muzzle.y*g.cell };
   }
   setLevel(lv){
     const n = clamp(lv, 1, MAX_LEVEL);
@@ -1211,7 +1281,7 @@ class Player {
         const g = this.trail[this.trail.length - 1 - (i+1)*2];
         if(!g) continue;
         ctx.globalAlpha = (0.30 - i*0.09) * k;
-        drawDragon(ctx, currentDragon().pal, this.level, g.x, g.y, g.pose, false, '#6fb8ff');
+        drawDragon(ctx, this.dragon.pal, this.level, g.x, g.y, g.pose, false, '#6fb8ff');
       }
       ctx.globalAlpha = 1;
     }
@@ -1220,13 +1290,13 @@ class Player {
     if(this.growT > 0){
       const k = this.growT / 0.45;
       if(Math.floor(this.growT * 24) % 2 === 0){
-        const dg = currentDragon();
+        const dg = this.dragon;
         drawDragon(ctx, dg.pal, this.level, this.x, this.y + bob, pose, false, '#fff2c0', dg.always);
         return;
       }
       ctx.globalAlpha = 1;
     }
-    const dg = currentDragon();
+    const dg = this.dragon;
     drawDragon(ctx, dg.pal, this.level, this.x, this.y + bob, pose, false, null, dg.always);
   }
 }
@@ -1630,7 +1700,7 @@ class FireBolt {
     // 화면 밖은 그리지 않는다 (고레벨에서 불줄기가 70개 넘게 깔린다)
     if(this.x < -20 || this.x - this.len > GAME_W + 20) return;
     if(this.y < -80 || this.y > GAME_H + 80) return;
-    const L = this.len, T = this.th, seg = 18;   // 도트 단위를 키워 드로우 수를 크게 줄임
+    const L = this.len, T = this.th, seg = 24;   // 도트 단위(6도트)를 키워 드로우 수를 크게 줄임
     const x0 = snap(this.x - L);
     for(let sx=0; sx<L; sx+=seg){
       const t = sx / L;                                        // 0=꼬리, 1=머리
@@ -1640,7 +1710,6 @@ class FireBolt {
       const prof = (0.34 + 0.66*t) * (0.55 + 0.45*head) * wob;
       const h  = Math.max(PX, snap(T*prof));
       const gx = x0 + sx, gy = snap(this.y);
-      ctx.fillStyle = PAL.fire[6]; ctx.fillRect(gx, gy - h/2 - PX, seg, h + PX*2);  // 겉불 테두리
       ctx.fillStyle = PAL.fire[4]; ctx.fillRect(gx, gy - h/2, seg, h);
       const h2 = Math.max(PX, snap(h*0.70));
       ctx.fillStyle = PAL.fire[2]; ctx.fillRect(gx, gy - h2/2, seg, h2);
@@ -2080,7 +2149,7 @@ class HeavyRider extends EnemyBase {
       this.missileT -= dt;
       if(this.missileT <= 0){
         this.missileT = 2.6 + Math.random()*1.0;
-        scene.missiles.push(new HomingMissile(this.x - 46, this.y, scene.player, 250, 1.9));
+        scene.missiles.push(new HomingMissile(this.x - 46, this.y, scene.nearestPlayer(this.x, this.y), 250, 1.9));
       }
       this.bombT -= dt;
       if(this.bombT <= 0){
@@ -2162,8 +2231,7 @@ class MidBoss extends EnemyBase {
         break;
       case 'wind': {                                  // 패턴2 : 날개 바람 (주인공 밀어냄)
         this.y = this.homeY + Math.sin(this.t*2.4)*26;
-        const p = scene.player;
-        p.x -= 300*dt;                                 // 왼쪽으로 밀림
+        for(const p of scene.livePlayers()) p.x -= 300*dt;   // 모든 플레이어를 왼쪽으로 밀어냄
         if(Math.random() < 0.6)
           Particles.spawn(this.x - 90, this.y + (Math.random()-0.5)*180, 1,
             { ang:Math.PI, spread:0.25, spd:520, life:0.42, grav:0, drag:0.6,
@@ -2179,7 +2247,7 @@ class MidBoss extends EnemyBase {
         }else{
           this.x += (this.homeX - this.x) * Math.min(1, 2.4*dt);
         }
-        this.y += (scene.player.y - this.y) * Math.min(1, 1.2*dt);
+        this.y += (scene.nearestPlayer(this.x, this.y).y - this.y) * Math.min(1, 1.2*dt);
         if(this.pt > 1.6){ this.phase = 'idle'; this.pt = 0; }
         break;
       }
@@ -2276,7 +2344,7 @@ class Boss extends EnemyBase {
           const n = this.enraged ? 18 : 14;
           for(let i=0;i<n;i++){
             const m = new HomingMissile(this.x - 90, this.y - 130 + i*(260/n),
-              scene.player, 300 + i*10, 2.1);
+              scene.nearestPlayer(this.x, this.y), 300 + i*10, 2.1);
             m.t = -i*0.05;                            // 약간씩 시차를 두고 유도 시작
             scene.missiles.push(m);
           }
@@ -2301,7 +2369,7 @@ class Boss extends EnemyBase {
         }else{
           this.x += (this.homeX - this.x) * Math.min(1, 2.2*dt);
         }
-        this.y += (scene.player.y - this.y) * Math.min(1, 1.0*dt);
+        this.y += (scene.nearestPlayer(this.x, this.y).y - this.y) * Math.min(1, 1.0*dt);
         if(this.pt > 1.9){ this.phase = 'idle'; this.pt = 0; }
         break;
       }
@@ -2406,7 +2474,7 @@ class Director {
   spawnMid(){
     if(this.midSpawned) return;
     this.midSpawned = true;
-    const b = new MidBoss(this.stage, this.s.player.level);
+    const b = new MidBoss(this.stage, this.s.p1.level);
     this.s.enemies.push(b); this.s.boss = b;
     this.s.bossBannerT = 2.2;
     Shake.add(6, 0.4);
@@ -2415,7 +2483,7 @@ class Director {
   spawnBoss(){
     if(this.bossSpawned) return;
     this.bossSpawned = true;
-    const b = new Boss(this.stage, this.s.player.level);
+    const b = new Boss(this.stage, this.s.p1.level);
     this.s.enemies.push(b); this.s.boss = b;
     this.s.bossBannerT = 2.6;
     Shake.add(9, 0.6);
@@ -2516,7 +2584,9 @@ class PlayerMissile {
 
     // 굵은 화염 + 연기 궤적
     const bx = this.x - Math.cos(this.ang)*26, by = this.y - Math.sin(this.ang)*26;
-    Particles.spawn(bx, by, 2, { spd:70, life:0.30, grav:-30, drag:3.2, size:PX*2 });
+    // 다발 발사 시 파티클 포화를 막는다
+    Particles.spawn(bx, by, Particles.count > 620 ? 1 : 2,
+      { spd:70, life:0.30, grav:-30, drag:3.2, size:PX*2 });
     this.smokeT -= dt;
     if(this.smokeT <= 0){
       this.smokeT = 0.035;
@@ -2605,9 +2675,10 @@ function pickTargets(scene, x, y, n){
 const BOMB_FX = { CHARGE:0.45, FLASH:0.62, FIREBALL:1.55, WAVE:2.25, TOTAL:3.0 };
 
 class DragonRoar {
-  constructor(scene){
+  constructor(scene, owner){
     this.t = 0; this.applied = false; this.dead = false;
-    this.px = scene.player.x; this.py = scene.player.y;
+    const o = owner || scene.p1;
+    this.px = o.x; this.py = o.y;
     this.ringN = 0;
     this.debris = [];
     for(let i=0;i<70;i++){                       // 화구 표면에서 솟구치는 불덩이
@@ -2868,8 +2939,8 @@ const ICON_BOMB = [
   '....KKKK....'
 ];
 class TouchButton {
-  constructor(x, y, r, icon, cell, color){
-    this.x = x; this.y = y; this.r = r; this.color = color;
+  constructor(x, y, r, icon, cell, color, tag){
+    this.x = x; this.y = y; this.r = r; this.color = color; this.tag = tag || '';
     this.icon = icon; this.cols = icon[0].length; this.cell = cell;
     this.iw = this.cols * cell; this.ih = icon.length * cell;
     this.pid = null; this.just = false; this.flash = 0;
@@ -2897,6 +2968,9 @@ class TouchButton {
     ctx.globalAlpha = 1;
     drawText(ctx, 'x' + count, this.x, this.y + this.ih/2 - 2, 4,
       { align:'center', color: usable ? this.color : '#5a6478', outline:PAL.outline, shadow:'#000' });
+    if(this.tag)
+      drawText(ctx, this.tag, this.x, this.y - this.r - 22, 3,
+        { align:'center', color:this.color, outline:PAL.outline, shadow:'#000' });
   }
 }
 
@@ -3205,6 +3279,7 @@ const MAX_LIVES = 10;
 const BOMB_ITEM_INTERVAL = 20;      // 20초마다 필살기 구슬 등장
 const STAGE_TIME = 120;             // 스테이지 제한 시간 (초). 보스전이 길어져 90 -> 120
 const TIME_BAR = { x: 400, y: 16, w: 480, h: 26 };   // 상단 중앙 시간 게이지 (터치 시 일시정지)
+const P1_COLOR = '#8fd0ff', P2_COLOR = '#ffa8d0';
 
 class GameScene extends Scene {
   constructor(stage){ super(); this.stageNo = clamp(stage || 1, 1, 20); }
@@ -3213,7 +3288,6 @@ class GameScene extends Scene {
     const st = STAGES[this.stage];
     this.theme = st;
     this.sky = buildSky(st.sky);
-    // 4층 패럴랙스 (원경 -> 전경). 전경은 플레이어보다 앞에 그려 스쳐 지나가게 한다
     const L = st.layers, sd = 1000 + this.stage*17;
     this.far  = L[0].s === 'none' ? null : buildRidge(sd+0, L[0].b, L[0].a, L[0].r, L[0].c, L[0].s);
     this.mid  = L[1].s === 'none' ? null : buildRidge(sd+1, L[1].b, L[1].a, L[1].r, L[1].c, L[1].s);
@@ -3221,24 +3295,19 @@ class GameScene extends Scene {
     this.fg   = L[3].s === 'none' ? null : buildRidge(sd+3, L[3].b, L[3].a, L[3].r, L[3].c, L[3].s);
     this.weather = st.fx ? new Weather(st.fx, sd) : null;
     this.offFar = 0; this.offMid = 0; this.offNear = 0; this.offFg = 0;
-    this.scrollK = 1;      // 플레이어 이동에 반응하는 스크롤 배율
-    this.camLead = 0;      // 진행 방향으로 월드를 미는 카메라 리드
+    this.scrollK = 1; this.camLead = 0;
 
-    this.player = new Player(320, GAME_H/2, Save.data.level);
-    const o = optGet();
-    this.stick  = new VirtualStick(makeStickCfg());
-    // 버튼 크기가 커져도 화면 밖으로 나가지 않도록 오른쪽/아래 기준으로 배치
-    const br = BTN_R[clamp(o.btnSize,0,2)], br2 = Math.round(br*0.92);
-    const my = GAME_H - br - 52;
-    this.btnMsl  = new TouchButton(GAME_W - br - 140, my, br, ICON_MISSILE, 4, '#8fd0ff');
-    this.btnBomb = new TouchButton(GAME_W - br2 - 24, my - br - 40, br2, ICON_BOMB, 4, PAL.gold);
-    this.btnMsl.alpha = this.btnBomb.alpha = o.btnAlpha;
-    applyAudioOpt();
+    // --- 플레이어 ---
+    this.p1 = new Player(320, GAME_H/2 - 60, Save.data.level, Save.data.dragon|0, 1);
+    this.p2 = null;                 // 2P 는 게임 도중 WASD 로 난입
+    this.joining = false;           // 2P 캐릭터 선택 중
+    this.joinSel = 0; this.joinT = 0;
+
+    this.stick = new VirtualStick(makeStickCfg());
+    this.buildButtons();
     Input.pointerHandler = {
       down:(id,x,y) => {
-        // 우상단 전체화면 버튼
         if(x >= GAME_W-58 && y <= 44){ toggleFullscreen(); return; }
-        // 상단 시간 게이지를 누르면 일시정지 (스펙 6.1)
         if(this.state === 'play' &&
            x >= TIME_BAR.x - 10 && x <= TIME_BAR.x + TIME_BAR.w + 10 &&
            y >= TIME_BAR.y - 10 && y <= TIME_BAR.y + TIME_BAR.h + 10){
@@ -3247,39 +3316,37 @@ class GameScene extends Scene {
         if(this.state !== 'play'){ this.uiTap = true; return; }
         if(this.btnMsl.down(id,x,y)) return;
         if(this.btnBomb.down(id,x,y)) return;
-        this.stick.down(id,x,y);
+        if(this.btnMsl2 && this.btnMsl2.down(id,x,y)) return;
+        if(this.btnBomb2 && this.btnBomb2.down(id,x,y)) return;
+        if(!this.p2) this.stick.down(id,x,y);
       },
-      move:(id,x,y) => { this.stick.move(id,x,y); },
-      up:  (id)     => { this.btnMsl.up(id); this.btnBomb.up(id); this.stick.up(id); }
+      move:(id,x,y) => { if(!this.p2) this.stick.move(id,x,y); },
+      up:  (id)     => {
+        this.btnMsl.up(id); this.btnBomb.up(id);
+        if(this.btnMsl2) this.btnMsl2.up(id);
+        if(this.btnBomb2) this.btnBomb2.up(id);
+        this.stick.up(id);
+      }
     };
 
     // 전투 상태
     this.bolts = []; this.enemies = []; this.arrows = []; this.booms = [];
     this.eshots = []; this.missiles = []; this.bombs = []; this.waves = [];
     this.pmissiles = []; this.items = []; this.roars = [];
-    this.fireT = 0; this.score = 0; this.kills = 0; this.hurtT = 0;
-    Freeze.reset(); Flash.reset(); Popups.clear();
+    this.score = 0; this.kills = 0;
     this.boss = null; this.bossBannerT = 0; this.bossDeathT = 0;
-
-    // 무기 / 생존 자원 (HP·하트 완전 연동은 Phase 6)
-    this.missileCount = 0; this.bombCount = 0;   // 스테이지마다 0개부터 시작 (스펙 9.2)
-    this.combo = 0; this.comboT = 0;
     this.killStreak = 0; this.bombItemT = BOMB_ITEM_INTERVAL; this.bombItemsLeft = 2;
-    this.hp = 100; this.lives = 5;
+    this.lives = 5;                 // 하트는 두 명이 공유
     this.pickupMsg = null; this.pickupT = 0;
+    Freeze.reset(); Flash.reset(); Popups.clear();
 
-    // 게임 루프 상태
-    this.state = 'play';          // play | pause | clear | over
-    this.stateT = 0;
-    this.timeLeft = STAGE_TIME;
-    this.endReason = '';
-    this.bonus = 0;
-    this.finalBossKilled = false;
-    this.menuIdx = 0;
+    this.state = 'play'; this.stateT = 0;
+    this.timeLeft = STAGE_TIME; this.endReason = ''; this.bonus = 0;
+    this.finalBossKilled = false; this.menuIdx = 0;
 
     this.director = new Director(this, this.stage);
     this.best = Save.data.best[this.stage] || 0;
-    Particles.clear();
+    applyAudioOpt();
 
     const rnd = mulberry32(909 + this.stage*13);
     this.clouds = [];
@@ -3291,7 +3358,6 @@ class GameScene extends Scene {
     this.lines = [];
     for(let i=0;i<70;i++)
       this.lines.push({ x: rnd()*GAME_W, y: snap(rnd()*GAME_H), len: snap(40+rnd()*110), sp: 900+rnd()*900 });
-    // 전경 구름 (플레이어 앞을 아주 빠르게 스쳐 지나감)
     this.fgWisps = [];
     for(let i=0;i<7;i++)
       this.fgWisps.push({ x: rnd()*GAME_W*1.6, y: snap(30 + rnd()*640),
@@ -3299,15 +3365,36 @@ class GameScene extends Scene {
   }
   exit(){ Input.pointerHandler = null; }
 
-  muzzle(){
-    const p = this.player, g = growthOf(p.level), f = FORMS[g.form];
-    return { x: p.x + f.muzzle.x*g.cell, y: p.y + f.muzzle.y*g.cell };
+  /* 1인일 때는 오른쪽에만, 2인일 때는 좌우로 나눠 배치한다 */
+  buildButtons(){
+    const o = optGet();
+    const br = BTN_R[clamp(o.btnSize,0,2)], br2 = Math.round(br*0.92);
+    const my = GAME_H - br - 52;
+    this.btnMsl  = new TouchButton(GAME_W - br - 140, my, br, ICON_MISSILE, 4, P1_COLOR, this.p2 ? '1P' : '');
+    this.btnBomb = new TouchButton(GAME_W - br2 - 24, my - br - 40, br2, ICON_BOMB, 4, PAL.gold, this.p2 ? '1P' : '');
+    this.btnMsl.alpha = this.btnBomb.alpha = o.btnAlpha;
+    if(this.p2){
+      this.btnMsl2  = new TouchButton(br + 140, my, br, ICON_MISSILE, 4, P2_COLOR, '2P');
+      this.btnBomb2 = new TouchButton(br2 + 24, my - br - 40, br2, ICON_BOMB, 4, PAL.gold, '2P');
+      this.btnMsl2.alpha = this.btnBomb2.alpha = o.btnAlpha;
+    }else{
+      this.btnMsl2 = this.btnBomb2 = null;
+    }
   }
+
+  players(){ return this.p2 ? [this.p1, this.p2] : [this.p1]; }
+  livePlayers(){ return this.players(); }
+  nearestPlayer(x, y){
+    const ps = this.players();
+    if(ps.length === 1) return ps[0];
+    return Math.hypot(ps[0].x-x, ps[0].y-y) <= Math.hypot(ps[1].x-x, ps[1].y-y) ? ps[0] : ps[1];
+  }
+
   onBossKilled(b){
     this.director.onBossKilled(b);
     if(this.boss === b) this.boss = null;
     const big = !(b instanceof MidBoss);
-    if(big) this.finalBossKilled = true;          // 최종보스 격파 -> 폭발 연출 후 클리어
+    if(big) this.finalBossKilled = true;
     this.bossDeathT = big ? 3.0 : 2.0;
     this.bossDeathX = b.x; this.bossDeathY = b.y; this.bossDeathR = big ? 150 : 100;
     Shake.add(big ? 22 : 15, big ? 1.0 : 0.6);
@@ -3319,41 +3406,52 @@ class GameScene extends Scene {
     Input.rumble(1.0, 0.9, 700);
   }
 
-  /* 적이 "격파"되었을 때만 호출 (화면 밖 소멸은 제외) */
   onEnemyKilled(e){
-    if(e instanceof MidBoss){
-      this.items.push(new Item(e.x, e.y, ITEM_KIND.POWER));            // 파워업 (불 레벨 +1)
-      return;
-    }
+    if(e instanceof MidBoss){ this.items.push(new Item(e.x, e.y, ITEM_KIND.POWER)); return; }
     if(e instanceof Boss){
-      this.items.push(new Item(e.x - 40, e.y - 30, ITEM_KIND.HEART));  // 하트 고정 드롭
-      this.items.push(new Item(e.x + 40, e.y + 30, ITEM_KIND.BOMB));   // 필살기 고정 드롭
+      this.items.push(new Item(e.x - 40, e.y - 30, ITEM_KIND.HEART));
+      this.items.push(new Item(e.x + 40, e.y + 30, ITEM_KIND.BOMB));
       return;
     }
     this.killStreak++;
-    if(this.killStreak % 3 === 0)                                      // 적 3마리마다 미사일 +1
-      this.items.push(new Item(e.x, e.y, ITEM_KIND.MISSILE));
-    else if(Math.random() < 0.15)                                      // 15% 사과
-      this.items.push(new Item(e.x, e.y, ITEM_KIND.APPLE));
+    if(this.killStreak % 3 === 0) this.items.push(new Item(e.x, e.y, ITEM_KIND.MISSILE));
+    else if(Math.random() < 0.15) this.items.push(new Item(e.x, e.y, ITEM_KIND.APPLE));
   }
 
-  pickup(it){
+  pickup(it, who){
+    const p = who || this.p1;
     let msg = '';
     switch(it.kind){
-      case ITEM_KIND.APPLE:   this.hp = Math.min(100, this.hp + 20); msg = 'HP +20%'; break;
+      case ITEM_KIND.APPLE:   p.hp = Math.min(100, p.hp + 20); msg = 'HP +20%'; break;
       case ITEM_KIND.HEART:   this.lives = Math.min(MAX_LIVES, this.lives + 1); msg = 'LIFE +1'; break;
-      case ITEM_KIND.MISSILE: this.missileCount++; msg = 'MISSILE +1'; break;
-      case ITEM_KIND.BOMB:    this.bombCount++; msg = 'BOMB +1'; break;
+      case ITEM_KIND.MISSILE: p.missileCount++; msg = 'MISSILE +1'; break;
+      case ITEM_KIND.BOMB:    p.bombCount++; msg = 'BOMB +1'; break;
       case ITEM_KIND.POWER:
-        if(this.player.setLevel(this.player.level + 1)) msg = 'FIRE LV UP!';
-        else msg = 'MAX LEVEL';
-        break;
+        msg = p.setLevel(p.level + 1) ? 'FIRE LV UP!' : 'MAX LEVEL'; break;
     }
     this.score += 50;
     SND.sfx(it.kind === ITEM_KIND.POWER ? 'levelup' : 'item');
-    this.pickupMsg = msg; this.pickupT = 1.2;
+    this.pickupMsg = (this.p2 ? (p.pid + 'P ') : '') + msg; this.pickupT = 1.2;
     Particles.spawn(it.x, it.y, 14, { spd:260, life:0.45, grav:-60,
       pal:['#ffffff','#ffe14a','#ffa32e','#ff7a1e'] });
+  }
+
+  /* 2P 난입 : WASD 를 누르면 상단에서 캐릭터를 고른다 */
+  startJoin(){
+    if(this.p2 || this.joining) return;
+    this.joining = true; this.joinT = 0;
+    this.joinSel = (Save.data.dragon + 1) % DRAGONS.length;
+    SND.sfx('confirm');
+  }
+  confirmJoin(){
+    this.joining = false;
+    this.p2 = new Player(320, GAME_H/2 + 90, Save.data.level, this.joinSel, 2);
+    this.p2.missileCount = this.p1.missileCount;      // 난입 시 같은 수량으로 시작
+    this.p2.bombCount = this.p1.bombCount;
+    this.stick.up(this.stick.pid);
+    this.buildButtons();
+    Popups.add(this.p2.x, this.p2.y - 90, '2P JOIN!', P2_COLOR, 5);
+    SND.sfx('levelup'); Flash.add(P2_COLOR, 0.2, 0.35);
   }
 
   setPause(on){
@@ -3367,25 +3465,22 @@ class GameScene extends Scene {
     if(kind === 'clear'){
       this.bonus = Math.round(this.timeLeft) * 100 + this.lives * 500;
       this.score += this.bonus;
-      this.lives = Math.min(MAX_LIVES, this.lives + 1);      // 클리어 보상 하트 +1
+      this.lives = Math.min(MAX_LIVES, this.lives + 1);
       SND.sfx('fanfare');
       Save.data.unlocked = Math.max(Save.data.unlocked, Math.min(20, this.stage + 1));
-      // 적이 스테이지마다 늘어나므로 주인공도 클리어할 때마다 무조건 한 단계 강해진다
-      this.levelUpReward = this.player.level < MAX_LEVEL;
-      Save.data.level = clamp(this.player.level + 1, 1, MAX_LEVEL);
+      this.levelUpReward = this.p1.level < MAX_LEVEL;
+      Save.data.level = clamp(this.p1.level + 1, 1, MAX_LEVEL);
     }else{
       SND.sfx('gameover');
-      Save.data.level = this.player.level;                   // 죽어서 내려간 레벨도 반영
+      Save.data.level = this.p1.level;
     }
     if(this.score > (Save.data.best[this.stage] || 0)) Save.data.best[this.stage] = this.score;
     Save.save();
   }
-  /* 일시정지 / 종료 화면에서는 게임 로직을 완전히 멈추고 연출만 갱신 */
   updatePaused(dt){
     this.stateT += dt;
     const tap = this.uiTap; this.uiTap = false;
-    if(Input.pressed('up'))   this.menuIdx = (this.menuIdx + 1) % 2;
-    if(Input.pressed('down')) this.menuIdx = (this.menuIdx + 1) % 2;
+    if(Input.pressed('up') || Input.pressed('down')) this.menuIdx = (this.menuIdx + 1) % 2;
     if(Input.pressed('pause')){ this.setPause(false); return; }
     if(Input.pressed('confirm') || tap){
       if(this.menuIdx === 0) this.setPause(false);
@@ -3394,7 +3489,6 @@ class GameScene extends Scene {
   }
   updateEnd(dt){
     this.stateT += dt;
-    // 폭발/파티클 잔여 연출만 계속 재생
     for(const b of this.booms) b.update(dt);
     Particles.update(dt); Popups.update(dt); Flash.update(dt); Shake.update(dt);
     this.booms = this.booms.filter(o => !o.dead);
@@ -3411,93 +3505,102 @@ class GameScene extends Scene {
       this.mgr.change(new StageSelectScene(this.stage));
   }
 
-  update(dt){
-    if(this.state === 'pause'){ this.updatePaused(dt); return; }   // 게임 로직 완전 정지
-    if(this.state !== 'play'){ this.updateEnd(dt); return; }
-    // 히트스톱 : 타격 순간 아주 잠깐 모든 것을 멈춰 임팩트를 만든다
-    if(Freeze.t > 0){ Freeze.t -= dt; Flash.update(dt); return; }
-
-    this.t += dt;
-    const p = this.player;
-
-    // ---- 제한 시간 ----
-    this.timeLeft -= dt;
-    if(this.timeLeft <= 0){ this.timeLeft = 0; this.finish('over', 'TIME UP'); return; }
-
-    // ---- 최종보스 격파 후 폭발이 끝나면 스테이지 클리어 ----
-    if(this.finalBossKilled && this.bossDeathT <= 0){ this.finish('clear'); return; }
-
-    // ---- 이동 ----
-    const sv = this.stick.vector();
-    const mv = (sv.x || sv.y) ? sv : Input.moveVector();
+  /* 플레이어 1명분의 이동 / 발사 / 무기 */
+  updatePlayer(p, dt){
+    let mv;
+    if(p.pid === 1){
+      const sv = this.p2 ? {x:0,y:0} : this.stick.vector();
+      mv = (sv.x || sv.y) ? sv : Input.moveVectorFor(1);
+    }else{
+      mv = Input.moveVectorFor(2);
+    }
     p.update(dt, mv);
-    this.btnMsl.update(dt); this.btnBomb.update(dt);
+    if(p.hurtT > 0) p.hurtT -= dt;
+    if(p.comboT > 0) p.comboT -= dt;
 
-    // ---- 파이어 블레스 ----
-    const lv = p.level, c = FIRE[lv];
-    this.fireT -= dt;
-    if(this.fireT <= 0){
-      this.fireT += FIRE_INTERVAL;
-      const m = this.muzzle();
+    // 파이어 블레스 (자동 연사)
+    const c = FIRE[p.level];
+    p.fireT -= dt;
+    if(p.fireT <= 0){
+      p.fireT += FIRE_INTERVAL;
+      const m = p.muzzle;
       if(c.n === 1){
-        this.bolts.push(new FireBolt(m.x, m.y, 0, lv));
+        this.bolts.push(new FireBolt(m.x, m.y, 0, p.level));
       }else{
-        // 갈래를 위아래로 고르게 부채꼴로 펼친다 (레벨이 오를수록 갈래가 늘어남)
         for(let i=0;i<c.n;i++){
-          const k = (i/(c.n-1) - 0.5) * 2;            // -1 ~ +1
-          this.bolts.push(new FireBolt(m.x, m.y + k*(12 + c.n*4), k*c.spread, lv));
+          const k = (i/(c.n-1) - 0.5) * 2;
+          this.bolts.push(new FireBolt(m.x, m.y + k*(12 + c.n*4), k*c.spread, p.level));
         }
       }
       Particles.spawn(m.x, m.y, 2, { ang:0, spread:0.9, spd:210, life:0.16, grav:0, drag:5 });
-      SND.sfx('fire', lv);
+      SND.sfx('fire', p.level);
     }
 
-    // ---- 탄도미사일 (수동) ----
-    if(this.comboT > 0) this.comboT -= dt;
-    const wantMsl  = Input.pressed('missile') || this.btnMsl.consume();
-    const wantBomb = Input.pressed('bomb')    || this.btnBomb.consume();
+    // 무기 입력
+    const pre = 'p' + p.pid;
+    const btnM = p.pid === 1 ? this.btnMsl : this.btnMsl2;
+    const btnB = p.pid === 1 ? this.btnBomb : this.btnBomb2;
+    const wantMsl  = Input.pressed(pre+'missile') || (btnM && btnM.consume());
+    const wantBomb = Input.pressed(pre+'bomb')    || (btnB && btnB.consume());
     const busyFx = this.roars.length > 0;
 
-    if(wantMsl && this.missileCount > 0 && !busyFx){
-      this.missileCount--;
-      this.combo = (this.comboT > 0) ? Math.min(MISSILE.MAX_COMBO, this.combo + 1) : 1;
-      this.comboT = MISSILE.COMBO_WINDOW;
-      const n = this.combo * 3;                       // 3 -> 6 -> 9발
-      const m = this.muzzle();
+    if(wantMsl && p.missileCount > 0 && !busyFx){
+      p.missileCount--;
+      p.combo = (p.comboT > 0) ? Math.min(MISSILE.MAX_COMBO, p.combo + 1) : 1;
+      p.comboT = MISSILE.COMBO_WINDOW;
+      const n = p.combo * 3;
+      const m = p.muzzle;
       const tg = pickTargets(this, m.x, m.y, n);
       const dmg = missileDamageOf(this.stage, p.level);
       for(let i=0;i<n;i++)
         this.pmissiles.push(new PlayerMissile(m.x, m.y, tg[i], dmg, i*0.045, (i % 2) ? 1 : -1));
       Particles.spawn(m.x, m.y, 30, { ang:0, spread:2.2, spd:520, life:0.42, size:PX*2 });
-      Shake.add(9, 0.18);
-      Flash.add('#ffe9c0', 0.08, 0.22);
-      SND.sfx('missile');
-      Input.rumble(0.35, 0.25, 120);
-      this.btnMsl.flash = 0.2;
+      Shake.add(9, 0.18); Flash.add('#ffe9c0', 0.08, 0.22);
+      SND.sfx('missile'); Input.rumble(0.35, 0.25, 120);
+    }
+    if(wantBomb && p.bombCount > 0 && !busyFx){
+      p.bombCount--;
+      this.roars.push(new DragonRoar(this, p));
+      SND.sfx('nuke'); Input.rumble(1.0, 1.0, 1200);
+    }
+  }
+
+  update(dt){
+    if(this.state === 'pause'){ this.updatePaused(dt); return; }
+    if(this.state !== 'play'){ this.updateEnd(dt); return; }
+    if(Freeze.t > 0){ Freeze.t -= dt; Flash.update(dt); return; }
+
+    this.t += dt;
+    this.timeLeft -= dt;
+    if(this.timeLeft <= 0){ this.timeLeft = 0; this.finish('over', 'TIME UP'); return; }
+    if(this.finalBossKilled && this.bossDeathT <= 0){ this.finish('clear'); return; }
+
+    // ---- 2P 난입 / 캐릭터 선택 ----
+    if(!this.p2 && !this.joining && Input.pressed('p2join')) this.startJoin();
+    if(this.joining){
+      this.joinT += dt;
+      if(Input.pressed('p2left'))  { this.joinSel = (this.joinSel + 9) % 10; SND.sfx('blip'); }
+      if(Input.pressed('p2right')) { this.joinSel = (this.joinSel + 1) % 10; SND.sfx('blip'); }
+      if(Input.pressed('p2up'))    { this.joinSel = (this.joinSel + 5) % 10; SND.sfx('blip'); }
+      if(Input.pressed('p2down'))  { this.joinSel = (this.joinSel + 5) % 10; SND.sfx('blip'); }
+      if(Input.pressed('p2missile') || Input.pressed('p2bomb') || Input.pressed('confirm')) this.confirmJoin();
     }
 
-    // ---- 필살기 드래곤 뢰 (수동) ----
-    if(wantBomb && this.bombCount > 0 && !busyFx){
-      this.bombCount--;
-      this.roars.push(new DragonRoar(this));
-      this.btnBomb.flash = 0.3;
-      SND.sfx('nuke');
-      Input.rumble(1.0, 1.0, 1200);
-    }
+    this.btnMsl.update(dt); this.btnBomb.update(dt);
+    if(this.btnMsl2){ this.btnMsl2.update(dt); this.btnBomb2.update(dt); }
+    for(const p of this.players()) this.updatePlayer(p, dt);
 
-    // ---- 웨이브 / 아이템 스폰 ----
+    // ---- 웨이브 / 아이템 ----
     this.director.update(dt);
     if(this.bossBannerT > 0) this.bossBannerT -= dt;
     if(this.pickupT > 0) this.pickupT -= dt;
-    if(this.bombItemsLeft > 0){                  // 스테이지당 2개 (스펙 3.4)
+    if(this.bombItemsLeft > 0){
       this.bombItemT -= dt;
       if(this.bombItemT <= 0){
-        this.bombItemT = BOMB_ITEM_INTERVAL;
-        this.bombItemsLeft--;
+        this.bombItemT = BOMB_ITEM_INTERVAL; this.bombItemsLeft--;
         this.items.push(new Item(GAME_W + 50, 140 + Math.random()*420, ITEM_KIND.BOMB));
       }
     }
-
     if(this.bossDeathT > 0){
       this.bossDeathT -= dt;
       if(Math.random() < 0.55){
@@ -3521,11 +3624,7 @@ class GameScene extends Scene {
     for(const m of this.pmissiles) m.update(dt, this);
     for(const it of this.items)    it.update(dt);
     for(const r of this.roars)     r.update(dt, this);
-    Particles.update(dt);
-    Popups.update(dt);
-    Flash.update(dt);
-    Shake.update(dt);
-    if(this.hurtT > 0) this.hurtT -= dt;
+    Particles.update(dt); Popups.update(dt); Flash.update(dt); Shake.update(dt);
 
     // ---- 충돌: 불 vs 적 ----
     for(const b of this.bolts){
@@ -3545,7 +3644,7 @@ class GameScene extends Scene {
         }
       }
     }
-    // ---- 충돌: 아군 미사일 vs 적 (근접 시 폭발) ----
+    // ---- 충돌: 아군 미사일 vs 적 ----
     for(const mi of this.pmissiles){
       if(mi.dead || mi.t < 0) continue;
       const mb = mi.box;
@@ -3554,20 +3653,21 @@ class GameScene extends Scene {
         if(overlap(mb, e.box)){ mi.explode(this); break; }
       }
     }
-    // ---- 아이템 획득 (히트박스보다 넉넉한 범위) ----
-    const pb = { x:p.x - 46, y:p.y - 46, w:92, h:92 };
+    // ---- 아이템 획득 (가까운 플레이어가 먹음) ----
     for(const it of this.items){
       if(it.dead) continue;
-      if(overlap(it.box, pb)){ this.pickup(it); it.dead = true; }
+      for(const p of this.players()){
+        const pb = { x:p.x - 46, y:p.y - 46, w:92, h:92 };
+        if(overlap(it.box, pb)){ this.pickup(it, p); it.dead = true; break; }
+      }
     }
-
-    // ---- 격파 처리 (드롭) : 화면 밖 소멸과 구분하기 위해 killed 플래그 사용 ----
+    // ---- 격파 처리 (드롭) ----
     for(const e of this.enemies){
       if(e.killed && !e.dropped){ e.dropped = true; this.onEnemyKilled(e); }
     }
-
-    // ---- 충돌: 적 공격 vs 주인공 ----
-    if(this.hurtT <= 0){
+    // ---- 충돌: 적 공격 vs 각 플레이어 ----
+    for(const p of this.players()){
+      if(p.hurtT > 0) continue;
       const hb = p.hitbox;
       let struck = false;
       for(const list of [this.arrows, this.eshots, this.missiles, this.bombs]){
@@ -3584,7 +3684,7 @@ class GameScene extends Scene {
         const d = Math.hypot(p.x - w.x, p.y - w.y);
         if(Math.abs(d - w.r) < 30){ w.hitDone = true; struck = true; break; }
       }
-      if(struck) this.hurtPlayer();
+      if(struck) this.hurtPlayer(p);
     }
 
     // ---- 정리 ----
@@ -3596,13 +3696,14 @@ class GameScene extends Scene {
     this.bombs     = this.bombs.filter(o => !o.dead);
     this.waves     = this.waves.filter(o => !o.dead);
     this.booms     = this.booms.filter(o => !o.dead);
+    if(this.booms.length > 26) this.booms.splice(0, this.booms.length - 26);
     this.pmissiles = this.pmissiles.filter(o => !o.dead);
     this.items     = this.items.filter(o => !o.dead);
     this.roars     = this.roars.filter(o => !o.dead);
 
-    // ---- 배경 : 플레이어가 앞으로 밀수록 세상이 빨라진다 ----
-    const drive = clamp(p.vx / PLAYER.SPEED, -1, 1);
-    this.scrollK += (1 + drive*0.7 - this.scrollK) * Math.min(1, 4*dt);   // 0.3 ~ 1.7배
+    // ---- 배경 ----
+    const drive = clamp(this.p1.vx / PLAYER.SPEED, -1, 1);
+    this.scrollK += (1 + drive*0.7 - this.scrollK) * Math.min(1, 4*dt);
     this.camLead += (drive*30 - this.camLead) * Math.min(1, 5*dt);
     const K = this.scrollK;
     this.offFar  = (this.offFar  +  120*K*dt) % GAME_W;
@@ -3623,30 +3724,28 @@ class GameScene extends Scene {
     }
     if(this.weather) this.weather.update(dt, K);
 
-    if(DEBUG){                                   // 치트키는 디버그(F3)에서만
-      if(Input.pressed('lvup'))   p.setLevel(p.level + 1);
-      if(Input.pressed('lvdown')) p.setLevel(p.level - 1);
+    if(DEBUG){
+      if(Input.pressed('lvup'))   for(const p of this.players()) p.setLevel(p.level + 1);
+      if(Input.pressed('lvdown')) for(const p of this.players()) p.setLevel(p.level - 1);
     }
     if(!this.mgr.busy && Input.pressed('pause')) this.setPause(true);
     if(!this.mgr.busy && Input.pressed('back'))  this.mgr.change(new TitleScene());
   }
 
-  hurtPlayer(){
-    this.hurtT = 1.1;
+  hurtPlayer(p){
+    p.hurtT = 1.1;
     Shake.add(10, 0.25);
-    SND.sfx('hurt');
-    Input.rumble(0.9, 0.7, 260);
-    const p = this.player;
-    this.hp -= 25;
-    if(this.hp <= 0){
+    SND.sfx('hurt'); Input.rumble(0.9, 0.7, 260);
+    p.hp -= 25;
+    if(p.hp <= 0){
       this.lives = Math.max(0, this.lives - 1);
-      p.setLevel(p.level - 1);              // 죽으면 불 레벨 -1
-      this.hurtT = 1.8;
+      p.setLevel(p.level - 1);
+      p.hurtT = 1.8;
       Shake.add(14, 0.5);
       this.booms.push(new Boom(p.x, p.y, 120, 0.6));
       Particles.spawn(p.x, p.y, 34, { spd:460, life:0.8 });
-      if(this.lives <= 0){ this.hp = 0; this.finish('over', 'GAME OVER'); return; }
-      this.hp = 100;
+      if(this.lives <= 0){ p.hp = 0; this.finish('over', 'GAME OVER'); return; }
+      p.hp = 100;
     }
     Particles.spawn(p.x, p.y, 18, { spd:340, life:0.5, pal:['#fff','#ff9a5a','#ff4d5a','#8f1230'] });
   }
@@ -3662,7 +3761,6 @@ class GameScene extends Scene {
       ctx.fillRect(x - PX*2, cl.y + cl.h, snap(cl.w*0.7), PX*2);
     }
     ctx.globalAlpha = 1;
-    // 4층 패럴랙스 + 카메라 리드 (가까운 층일수록 리드를 크게 받아 원근이 강조됨)
     const lead = this.camLead;
     const draw2 = (img, off, k) => {
       const x = -snap(((off + lead*k) % GAME_W + GAME_W) % GAME_W);
@@ -3671,7 +3769,6 @@ class GameScene extends Scene {
     if(this.far)  draw2(this.far,  this.offFar,  0.25);
     if(this.mid)  draw2(this.mid,  this.offMid,  0.55);
     if(this.near) draw2(this.near, this.offNear, 1.0);
-    // 속도선 : 스크롤이 빠를수록 진하고 길어짐
     const sk = clamp((this.scrollK - 0.6) / 1.1, 0, 1);
     ctx.globalAlpha = 0.14 + sk*0.30; ctx.fillStyle = this.theme.line;
     for(const l of this.lines) ctx.fillRect(snap(l.x), l.y, snap(l.len*(0.6 + sk*0.9)), PX);
@@ -3687,12 +3784,16 @@ class GameScene extends Scene {
     for(const it of this.items)    it.render(ctx);
     for(const b of this.bolts)     b.render(ctx);
     for(const m of this.pmissiles) m.render(ctx);
-
-    const p = this.player;
-    if(this.hurtT > 0 && Math.floor(this.hurtT*18) % 2 === 0){
-      ctx.globalAlpha = 0.55; p.render(ctx); ctx.globalAlpha = 1;
-    }else p.render(ctx);
-
+    for(const p of this.players()){
+      if(p.hurtT > 0 && Math.floor(p.hurtT*18) % 2 === 0){
+        ctx.globalAlpha = 0.55; p.render(ctx); ctx.globalAlpha = 1;
+      }else p.render(ctx);
+      if(this.p2){                      // 2인일 때 누가 누군지 표시
+        const c = p.pid === 1 ? P1_COLOR : P2_COLOR;
+        drawText(ctx, p.pid + 'P', p.x, p.y - p.metrics.h/2 - 6, 2,
+          { align:'center', color:c, outline:PAL.outline });
+      }
+    }
     Particles.render(ctx);
     for(const w of this.waves) w.render(ctx);
     for(const b of this.booms) b.render(ctx);
@@ -3700,69 +3801,90 @@ class GameScene extends Scene {
     ctx.restore();
     Flash.render(ctx);
 
-    // ---- 전경 (플레이어보다 앞. 가장 빠르게 스쳐 지나가 속도감을 만든다) ----
     const fgx = -snap(((this.offFg + this.camLead*1.6) % GAME_W + GAME_W) % GAME_W);
     if(this.fg){ blitRidge(ctx, this.fg, fgx); blitRidge(ctx, this.fg, fgx + GAME_W); }
     if(this.weather) this.weather.renderFront(ctx);
-    for(const w of this.fgWisps){
-      ctx.globalAlpha = w.a; ctx.fillStyle = '#ffffff';
-      const x = snap(w.x);
-      ctx.fillRect(x, w.y, w.w, w.h);
-      ctx.fillRect(x + snap(w.w*0.25), w.y - PX, snap(w.w*0.45), PX);
+    for(const r of this.roars) r.render(ctx);
+
+    if(!this.p2) this.stick.render(ctx);
+    this.btnMsl.render(ctx, this.p1.missileCount);
+    this.btnBomb.render(ctx, this.p1.bombCount);
+    if(this.btnMsl2){
+      this.btnMsl2.render(ctx, this.p2.missileCount);
+      this.btnBomb2.render(ctx, this.p2.bombCount);
     }
-    ctx.globalAlpha = 1;
-
-    for(const r of this.roars) r.render(ctx);      // 필살기 연출은 화면 전체 고정
-
-    this.stick.render(ctx);
-    this.btnMsl.render(ctx, this.missileCount);
-    this.btnBomb.render(ctx, this.bombCount);
     this.renderHUD(ctx);
+    if(this.joining) this.renderJoin(ctx);
     if(DEBUG) this.renderDebug(ctx);
   }
 
+  /* 2P 캐릭터 선택 (화면 상단) */
+  renderJoin(ctx){
+    const H = 128, y0 = 150;
+    ctx.globalAlpha = 0.86; ctx.fillStyle = '#0a0618';
+    ctx.fillRect(0, y0, GAME_W, H); ctx.globalAlpha = 1;
+    ctx.fillStyle = P2_COLOR; ctx.fillRect(0, y0, GAME_W, PX); ctx.fillRect(0, y0+H-PX, GAME_W, PX);
+    drawText(ctx, '2P  SELECT DRAGON', 640, y0 + 8, 4,
+      { align:'center', color:P2_COLOR, outline:PAL.outline, shadow:'#000' });
+    for(let i=0;i<10;i++){
+      const d = DRAGONS[i], on = i === this.joinSel;
+      const x = 130 + i*110, y = y0 + 48;
+      ctx.fillStyle = on ? P2_COLOR : '#241c3e';
+      ctx.fillRect(x - 44, y - 4, 88, 56);
+      ctx.fillStyle = on ? '#2a2140' : '#120d24';
+      ctx.fillRect(x - 40, y, 80, 48);
+      const f = FORMS.A, cell = 1.7;
+      drawGrid(ctx, f.wings[2], snap(x - f.cols*cell/2), snap(y + 2), f.cols, cell, d.pal, false, null);
+      drawGrid(ctx, f.body,     snap(x - f.cols*cell/2), snap(y + 2), f.cols, cell, d.pal, false, null);
+      ctx.fillStyle = d.pal.M; ctx.fillRect(x - 40, y + 42, 80, 6);
+    }
+    drawText(ctx, DRAGONS[this.joinSel].id, 640, y0 + H - 30, 3,
+      { align:'center', color:PAL.white, outline:PAL.outline });
+    if(Math.floor(this.joinT*2.4) % 2 === 0)
+      drawText(ctx, 'A D : SELECT      ` OR 1 : JOIN', 640, y0 + H - 8, 2,
+        { align:'center', color:PAL.gold });
+  }
+
   renderHUD(ctx){
-    const p = this.player, g = growthOf(p.level);
-    // HP 게이지
-    ctx.fillStyle = '#0a1420'; ctx.fillRect(20, 18, 244, 22);
-    ctx.fillStyle = '#20344d'; ctx.fillRect(24, 22, 236, 14);
-    const hk = clamp(this.hp/100, 0, 1);
-    ctx.fillStyle = hk > 0.5 ? '#5ee07a' : (hk > 0.25 ? '#ffd24a' : '#ff4d5a');
-    ctx.fillRect(24, 22, snap(236*hk), 14);
-    ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(24, 22, snap(236*hk), 4);
-    // 하트
+    // 하트 (공유)
     for(let i=0;i<MAX_LIVES;i++){
-      const on = i < this.lives;
-      ctx.fillStyle = on ? '#ff2b4a' : '#2b3448';
-      const hx = 24 + i*22, hy = 48;
+      ctx.fillStyle = i < this.lives ? '#ff2b4a' : '#2b3448';
+      const hx = 24 + i*22, hy = 20;
       const rows = ['.XX.XX.','XXXXXXX','.XXXXX.','..XXX..','...X...'];
       for(let r=0;r<rows.length;r++) for(let cc=0;cc<7;cc++)
         if(rows[r][cc] === 'X') ctx.fillRect(hx + cc*3, hy + r*3, 3, 3);
     }
-    // 불 레벨
-    drawText(ctx, 'FIRE LV ' + p.level, 24, 74, 4,
-      { color:(r)=>PAL.fire[r], outline:PAL.outline, shadow:'#000', shadowOff:5 });
-    for(let i=1;i<=MAX_LEVEL;i++){
-      ctx.fillStyle = i <= p.level ? PAL.fire[Math.min(6, 6 - Math.floor(i*0.55))] : '#20344d';
-      ctx.fillRect(24 + (i-1)*17, 106, 13, 8);
-    }
-    drawText(ctx, g.form === 'A' ? 'HATCHLING' : 'FULL GROWN', 24, 120, 2, { color:'#dff0ff', shadow:'#0a1830' });
+    // 플레이어별 HP / 레벨
+    const bar = (p, x, y, col) => {
+      ctx.fillStyle = '#0a1420'; ctx.fillRect(x, y, 210, 20);
+      ctx.fillStyle = '#20344d'; ctx.fillRect(x+3, y+3, 204, 14);
+      const hk = clamp(p.hp/100, 0, 1);
+      ctx.fillStyle = hk > 0.5 ? '#5ee07a' : (hk > 0.25 ? '#ffd24a' : '#ff4d5a');
+      ctx.fillRect(x+3, y+3, snap(204*hk), 14);
+      drawText(ctx, p.pid + 'P  LV' + p.level, x + 3, y + 24, 2, { color:col, shadow:'#0a1830' });
+      for(let i=1;i<=MAX_LEVEL;i++){
+        ctx.fillStyle = i <= p.level ? PAL.fire[Math.min(6, 6 - Math.floor(i*0.55))] : '#20344d';
+        ctx.fillRect(x + 3 + (i-1)*20, y + 42, 16, 7);
+      }
+    };
+    bar(this.p1, 24, 44, P1_COLOR);
+    if(this.p2) bar(this.p2, GAME_W - 234, 44, P2_COLOR);
 
-    drawText(ctx, 'SCORE ' + String(this.score).padStart(7,'0'), 1264, 22, 4,
-      { align:'right', color:PAL.gold, outline:PAL.outline, shadow:'#000', shadowOff:5 });
-    drawText(ctx, 'KILL ' + this.kills + '   BEST ' + this.best, 1264, 60, 2,
-      { align:'right', color:'#dff0ff', shadow:'#0a1830' });
+    drawText(ctx, 'SCORE ' + String(this.score).padStart(7,'0'), 1264, 22, 3,
+      { align:'right', color:PAL.gold, outline:PAL.outline, shadow:'#000', shadowOff:4 });
     drawText(ctx, 'STAGE ' + this.stage + ' - ' + this.theme.n, 640, 52, 2,
       { align:'center', color:'#dff0ff', shadow:'#0a1830' });
+    if(!this.p2)
+      drawText(ctx, 'PRESS W A S D TO JOIN 2P', 640, 74, 2,
+        { align:'center', color:P2_COLOR, alpha: 0.5 + Math.sin(this.t*3)*0.3 });
 
-    // 미사일 연속 사용 게이지
-    if(this.comboT > 0 && this.combo > 0){
-      drawText(ctx, 'x' + (this.combo*3) + ' MISSILE', 1090, 540, 3,
+    // 미사일 콤보 게이지
+    for(const p of this.players()){
+      if(p.comboT <= 0 || p.combo <= 0) continue;
+      const bx = p.pid === 1 ? (this.btnMsl.x) : (this.btnMsl2 ? this.btnMsl2.x : 0);
+      drawText(ctx, 'x' + (p.combo*3), bx, GAME_H - 42, 3,
         { align:'center', color:PAL.fire[1], outline:PAL.outline });
-      ctx.fillStyle = '#8fd0ff';
-      ctx.fillRect(1090 - 50, 562, snap(100 * (this.comboT/MISSILE.COMBO_WINDOW)), 5);
     }
-    // 획득 메시지
     if(this.pickupT > 0 && this.pickupMsg){
       drawText(ctx, this.pickupMsg, 640, 200, 5,
         { align:'center', color:PAL.gold, outline:PAL.outline, shadow:'#000',
@@ -3771,24 +3893,23 @@ class GameScene extends Scene {
 
     const b = this.boss;
     if(b && !b.dead){
-      const w = 720, x = 640 - w/2, y = 148;
+      const w = 720, x = 640 - w/2, y = 110;
       ctx.fillStyle = '#0a0a14'; ctx.fillRect(x - PX, y - PX, w + PX*2, 20 + PX*2);
       ctx.fillStyle = '#2a2030'; ctx.fillRect(x, y, w, 20);
       const k = clamp(b.hp / b.maxHp, 0, 1);
       ctx.fillStyle = b.enraged ? PAL.fire[5] : PAL.fire[3];
       ctx.fillRect(x, y, snap(w*k), 20);
       ctx.fillStyle = PAL.fire[1]; ctx.fillRect(x, y, snap(w*k), 6);
-      drawText(ctx, b.name, 640, y - 26, 3, { align:'center', color:PAL.white, outline:PAL.outline, shadow:'#000' });
+      drawText(ctx, b.name, 640, y - 24, 3, { align:'center', color:PAL.white, outline:PAL.outline, shadow:'#000' });
     }
     if(this.bossBannerT > 0 && Math.floor(this.bossBannerT*6) % 2 === 0){
       drawText(ctx, 'WARNING', 640, 300, 10,
         { align:'center', color:(r)=>PAL.fire[r], outline:PAL.outline, shadow:'#000', shadowOff:10 });
     }
-    // ---- 상단 중앙 90초 카운트다운 게이지 (누르면 일시정지) ----
+
     const B = TIME_BAR, tk = clamp(this.timeLeft / STAGE_TIME, 0, 1);
     ctx.fillStyle = '#0a0a14'; ctx.fillRect(B.x - PX, B.y - PX, B.w + PX*2, B.h + PX*2);
     ctx.fillStyle = '#1d2536'; ctx.fillRect(B.x, B.y, B.w, B.h);
-    // 남을수록 노랑, 줄수록 빨강
     const seg = 16, sw = B.w / seg;
     for(let i=0;i<seg;i++){
       if(i / seg >= tk) break;
@@ -3799,14 +3920,14 @@ class GameScene extends Scene {
     ctx.fillStyle = 'rgba(255,255,255,.28)'; ctx.fillRect(B.x, B.y, snap(B.w*tk), 5);
     const secs = Math.ceil(this.timeLeft);
     const urgent = secs <= 10 && Math.floor(this.t*5) % 2 === 0;
-    drawText(ctx, String(secs).padStart(2,'0'), B.x + B.w/2, B.y + 5, 3,
+    drawText(ctx, String(secs).padStart(3,'0'), B.x + B.w/2, B.y + 5, 3,
       { align:'center', color: urgent ? '#ffffff' : PAL.outline, outline: urgent ? '#c81f2e' : null });
 
-    // 우상단 전체화면 아이콘
     ctx.globalAlpha = 0.8;
     drawFsIcon(ctx, GAME_W - 46, 10, 32, '#dff0ff', isFullscreen());
     ctx.globalAlpha = 1;
-    drawText(ctx, 'Q: MISSILE   E: BOMB   F: FULLSCREEN   ESC: PAUSE', 640, 700, 2,
+    drawText(ctx, this.p2 ? '1P: ARROWS / RALT / RCTRL     2P: WASD / ` / 1'
+                          : '1P: ARROWS / RALT / RCTRL     ESC: PAUSE', 640, 700, 2,
       { align:'center', color:'#cfe6ff', shadow:'#0a1830' });
 
     if(this.state === 'pause') this.renderPause(ctx);
@@ -3820,8 +3941,7 @@ class GameScene extends Scene {
       { align:'center', color:(r)=>PAL.fire[r], outline:PAL.outline, shadow:'#000', shadowOff:10 });
     const items = ['RESUME', 'QUIT TO TITLE'];
     for(let i=0;i<items.length;i++){
-      const on = i === this.menuIdx;
-      const y = 380 + i*66;
+      const on = i === this.menuIdx, y = 380 + i*66;
       if(on){
         drawText(ctx, '>', 400, y, 5, { color:PAL.gold, outline:PAL.outline });
         drawText(ctx, '<', 880, y, 5, { align:'right', color:PAL.gold, outline:PAL.outline });
@@ -3839,20 +3959,18 @@ class GameScene extends Scene {
     ctx.fillStyle = clear ? '#0d1a10' : '#160a0e'; ctx.fillRect(0,0,GAME_W,GAME_H);
     ctx.globalAlpha = 1;
     if(this.stateT < 0.35) return;
-
     const title = clear ? 'STAGE CLEAR' : (this.endReason || 'GAME OVER');
     drawText(ctx, title, 640, 170, 11,
       { align:'center', color: clear ? ((r)=>PAL.fire[r]) : '#c81f2e',
         outline:PAL.outline, shadow:'#000', shadowOff:10 });
-
     if(this.stateT > 0.6){
       const rows = clear
         ? [['SCORE', String(this.score)], ['TIME BONUS', '+' + this.bonus],
            ['KILLS', String(this.kills)],
-           ['FIRE LV', String(this.player.level) + (this.levelUpReward ? '  -> ' + Save.data.level : '  MAX')],
+           ['FIRE LV', String(this.p1.level) + (this.levelUpReward ? '  -> ' + Save.data.level : '  MAX')],
            ['LIFE', String(this.lives) + '  (+1)']]
         : [['SCORE', String(this.score)], ['KILLS', String(this.kills)],
-           ['FIRE LV', String(this.player.level)], ['TIME LEFT', Math.ceil(this.timeLeft) + 'S']];
+           ['FIRE LV', String(this.p1.level)], ['TIME LEFT', Math.ceil(this.timeLeft) + 'S']];
       for(let i=0;i<rows.length;i++){
         const y = 320 + i*46;
         if(this.stateT < 0.6 + i*0.12) break;
@@ -3866,45 +3984,26 @@ class GameScene extends Scene {
   }
 
   renderDebug(ctx){
-    const p = this.player, m = p.metrics, hb = p.hitbox;
     ctx.save(); ctx.translate(Shake.x, Shake.y);
     ctx.lineWidth = 2;
-    ctx.strokeStyle = '#00ff88'; ctx.strokeRect(hb.x, hb.y, hb.w, hb.h);
-    ctx.strokeStyle = 'rgba(255,80,120,.5)'; ctx.strokeRect(snap(p.x - m.w/2), snap(p.y - m.h/2), m.w, m.h);
+    for(const p of this.players()){
+      const m = p.metrics, hb = p.hitbox;
+      ctx.strokeStyle = p.pid === 1 ? '#00ff88' : '#ff88ff'; ctx.strokeRect(hb.x, hb.y, hb.w, hb.h);
+      ctx.strokeStyle = 'rgba(255,80,120,.5)'; ctx.strokeRect(snap(p.x - m.w/2), snap(p.y - m.h/2), m.w, m.h);
+    }
     ctx.strokeStyle = '#ff4d5a';
     for(const e of this.enemies){ const b = e.box; ctx.strokeRect(b.x, b.y, b.w, b.h); }
-    ctx.strokeStyle = '#ffd24a';
-    for(const b of this.bolts){ const bb = b.box; ctx.strokeRect(bb.x, bb.y, bb.w, bb.h); }
-    ctx.strokeStyle = '#ff9a5a';
-    for(const list of [this.arrows, this.eshots, this.missiles, this.bombs])
-      for(const o of list){ const ob = o.box; ctx.strokeRect(ob.x, ob.y, ob.w, ob.h); }
-    ctx.strokeStyle = '#8fd0ff';
-    for(const o of this.pmissiles){ const ob = o.box; ctx.strokeRect(ob.x, ob.y, ob.w, ob.h); }
-    ctx.strokeStyle = '#ffffff';
-    ctx.strokeRect(p.x - 46, p.y - 46, 92, 92);
     ctx.restore();
-
-    const bs = this.boss;
     drawText(ctx, 'ENEMY ' + this.enemies.length + '  BOLT ' + this.bolts.length
-      + '  PMSL ' + this.pmissiles.length + '  ITEM ' + this.items.length
-      + '  ESHOT ' + (this.eshots.length + this.arrows.length + this.missiles.length + this.bombs.length)
-      + '  PART ' + Particles.count, 16, 604, 2, { color:'#00ff88' });
-    drawText(ctx, 'MSL ' + this.missileCount + '  BOMB ' + this.bombCount
-      + '  COMBO ' + this.combo + '  STREAK ' + this.killStreak
-      + '  MSLDMG ' + Math.round(missileDamageOf(this.stage, this.player.level)), 16, 622, 2, { color:'#00ff88' });
-    drawText(ctx, 'WAVE ' + this.director.idx + '/' + TIMELINE.length
-      + '  T ' + this.director.t.toFixed(1)
-      + (bs ? ('  BOSS ' + bs.phase + ' ' + Math.max(0, Math.round(bs.hp))) : ''), 16, 640, 2, { color:'#00ff88' });
-    drawText(ctx, 'HP ' + this.hp + '  LIVES ' + this.lives
-      + '  DMG ' + FIRE[p.level].dmg + '  PIERCE ' + FIRE[p.level].pierce, 16, 658, 2, { color:'#00ff88' });
+      + '  PMSL ' + this.pmissiles.length + '  PART ' + Particles.count
+      + '  KEY ' + Input.lastKey, 16, 604, 2, { color:'#00ff88' });
+    drawText(ctx, '1P msl' + this.p1.missileCount + ' bomb' + this.p1.bombCount + ' hp' + this.p1.hp
+      + (this.p2 ? ('   2P msl' + this.p2.missileCount + ' bomb' + this.p2.bombCount + ' hp' + this.p2.hp) : ''),
+      16, 622, 2, { color:'#00ff88' });
     drawHUDDebug(ctx);
   }
 }
 
-/* ==================================================================
-   Phase 8 : 10종 드래곤
-   몸통/날개 그리드는 공유하고 팔레트 + 고유 파츠(뿔/등가시)로 구분한다.
-   ================================================================== */
 function mkDragonPal(o){
   return {
     K: o.line, D: o.dark, M: o.mid, L: o.light, T: o.tail || o.wing,
