@@ -3,11 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0a0616">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="DRAGON STRIKER">
+<meta name="screen-orientation" content="landscape">
 <title>DRAGON STRIKER</title>
 <style>
   *{ margin:0; padding:0; box-sizing:border-box; }
   html,body{
-    width:100%; height:100%; background:#000; overflow:hidden;
+    width:100%; height:100%; height:100dvh; background:#000; overflow:hidden;
     font-family:"Courier New",monospace;
     -webkit-tap-highlight-color:transparent;
     touch-action:none; user-select:none; -webkit-user-select:none;
@@ -29,16 +35,50 @@
   @keyframes rot{ 0%,40%{ transform:rotate(0deg) } 60%,100%{ transform:rotate(-90deg) } }
   #rotate .ko{ font-size:19px; letter-spacing:3px; }
   #rotate .en{ font-size:12px; letter-spacing:2px; color:#8a7bb8; }
+  #rotate button{
+    margin-top:6px; padding:14px 22px; font-size:16px; font-weight:800;
+    font-family:"Malgun Gothic","맑은 고딕","Apple SD Gothic Neo",sans-serif;
+    color:#ffd24a; background:rgba(10,6,22,.9); border:3px solid #ffd24a; cursor:pointer;
+  }
+
+  /* 전체화면 버튼 : 캔버스 위에 올리는 진짜 DOM 버튼.
+     실제 click 이벤트가 가장 강한 사용자 제스처라 브라우저가 허용할 확률이 가장 높다 */
+  #fsbtn{
+    position:fixed; z-index:20; display:none;
+    padding:13px 20px 14px; min-height:48px;          /* 모바일 터치 타깃 확보 */
+    font-family:"Malgun Gothic","맑은 고딕","Apple SD Gothic Neo",sans-serif;
+    font-size:16px; font-weight:800; letter-spacing:2px; line-height:1;
+    white-space:nowrap;                                /* 세로로 줄바꿈되지 않게 */
+    color:#ffd24a; background:rgba(10,6,22,.85);
+    border:3px solid #ffd24a; border-radius:0;
+    box-shadow:0 0 0 3px #2a0a14, 0 5px 0 #2a0a14;
+    cursor:pointer; -webkit-user-select:none; user-select:none;
+    -webkit-tap-highlight-color:transparent; touch-action:manipulation;
+    text-shadow:0 2px 0 #2a0a14;
+  }
+  #fsbtn:hover{ background:#3a2405; color:#fff6c2; }
+  #fsbtn:active{ transform:translateY(3px); box-shadow:0 0 0 3px #2a0a14, 0 2px 0 #2a0a14; }
+  #fstoast{
+    position:fixed; left:50%; transform:translateX(-50%); z-index:21; display:none;
+    padding:14px 22px; max-width:90vw; text-align:center;
+    font-family:"Malgun Gothic","맑은 고딕","Apple SD Gothic Neo",sans-serif;
+    font-size:15px; font-weight:700; line-height:1.6;
+    color:#ffd0b0; background:rgba(18,6,10,.95); border:3px solid #c81f2e;
+    box-shadow:0 0 0 3px #14040a;
+  }
+  #fstoast b{ color:#ffd24a; }
 </style>
 </head>
 <body>
 <div id="stage"><canvas id="game" width="1280" height="720"></canvas></div>
+<button id="fsbtn" type="button">전체화면</button>
+<div id="fstoast"></div>
 <div id="rotate">
   <div class="rot-icon"></div>
   <p class="ko">가로 모드로 전환해주세요</p>
   <p class="en">PLEASE ROTATE YOUR DEVICE</p>
-  <p class="en">타이틀 화면 우측 상단의 전체화면 버튼을 누르면 가로로 고정됩니다<br>
-  (버튼이 안 먹으면 브라우저에서 F11 을 눌러 전체화면으로 만드세요)</p>
+  <p class="en">아래 버튼을 누르면 전체화면 + 가로 고정을 시도합니다</p>
+  <button id="rotfs" type="button">전체화면으로 열기</button>
 </div>
 <script>
 'use strict';
@@ -2951,20 +2991,7 @@ class TitleScene extends Scene {
     this.emberT = 0;
     this.shoot  = null;
     this.shootT = 2.5;
-    // 우측 상단 전체화면 버튼. 포인터 이벤트에서 바로 호출해야 허용된다
-    this.fsBtn = { x: GAME_W - 96, y: 24, w: 68, h: 68 };
-    Input.pointerHandler = {
-      down:(id, x, y) => {
-        const b = this.fsBtn;
-        if(x >= b.x - 8 && x <= b.x + b.w + 8 && y >= b.y - 8 && y <= b.y + b.h + 8){
-          Input.taps = Math.max(0, Input.taps - 1);   // 이 탭은 게임 시작으로 치지 않음
-          toggleFullscreen();
-          SND.resume(); SND.sfx('confirm');
-        }
-      }
-    };
   }
-  exit(){ Input.pointerHandler = null; }
 
   update(dt){
     this.t += dt;
@@ -3120,23 +3147,6 @@ class TitleScene extends Scene {
       { align:'center', color:PAL.dim });
     drawText(ctx, 'MOVE: WASD / ARROWS   MISSILE: Q   BOMB: E   PAUSE: ESC', 640, 672, 2,
       { align:'center', color:PAL.dim });
-    // ---- 우측 상단 전체화면 버튼 ----
-    const b = this.fsBtn, fs = isFullscreen();
-    const hot = 0.9 + Math.sin(this.t*3)*0.1;
-    ctx.globalAlpha = 0.42; ctx.fillStyle = '#0a0616';
-    ctx.fillRect(b.x - PX*2, b.y - PX*2, b.w + PX*4, b.h + PX*4);
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = PAL.gold;
-    ctx.fillRect(b.x - PX*2, b.y - PX*2, b.w + PX*4, PX);
-    ctx.fillRect(b.x - PX*2, b.y + b.h + PX, b.w + PX*4, PX);
-    ctx.fillRect(b.x - PX*2, b.y - PX*2, PX, b.h + PX*4);
-    ctx.fillRect(b.x + b.w + PX, b.y - PX*2, PX, b.h + PX*4);
-    ctx.globalAlpha = hot;
-    drawFsIcon(ctx, b.x, b.y, b.w, PAL.gold, fs);
-    ctx.globalAlpha = 1;
-    drawText(ctx, !document.fullscreenEnabled ? 'F11' : (fs ? 'EXIT' : 'FULL'),
-      b.x + b.w/2, b.y + b.h + 10, 2, { align:'center', color:PAL.goldDim });
-
     drawText(ctx, 'PHASE 1 - V0.1', 1264, 700, 2, { align:'right', color:PAL.goldDim });
     drawText(ctx, 'F3: DEBUG', 16, 700, 2, { color:PAL.goldDim });
 
@@ -3970,35 +3980,84 @@ function lockLandscape(){
       screen.orientation.lock('landscape').catch(function(){});
   }catch(e){}
 }
-/* 전체화면 실패를 조용히 삼키지 않고 화면에 알린다 (원인을 알 수 없으면 사용자가 답답하다) */
-let FS_MSG = '', FS_MSG_T = 0;
-function fsNote(m){ FS_MSG = m; FS_MSG_T = 3.6; }
+const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+            || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const IS_TOUCH = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+function isStandalone(){
+  return window.navigator.standalone === true
+      || (window.matchMedia && (window.matchMedia('(display-mode: fullscreen)').matches
+                             || window.matchMedia('(display-mode: standalone)').matches));
+}
+
+/* 전체화면 안내 토스트 (한글). 캔버스 폰트가 ASCII 전용이라 DOM 으로 띄운다 */
+let _fsToastT = null;
+function fsToast(html, ms){
+  const el = document.getElementById('fstoast');
+  if(!el) return;
+  el.innerHTML = html;
+  el.style.display = 'block';
+  clearTimeout(_fsToastT);
+  _fsToastT = setTimeout(function(){ el.style.display = 'none'; }, ms || 6000);
+}
+/* 환경별로 실제로 통하는 방법을 안내한다 */
 function fsBlocked(){
-  // 브라우저가 막는 대표 상황: data: URL, 권한 없는 iframe, 일부 file:// 설정
-  fsNote(document.fullscreenEnabled ? 'FULLSCREEN BLOCKED - PRESS F11 INSTEAD'
-                                    : 'FULLSCREEN DISABLED HERE - PRESS F11');
+  if(IS_IOS){
+    fsToast('아이폰 사파리는 전체화면 기능을 막아두었습니다.<br>'
+          + '공유 버튼 → <b>홈 화면에 추가</b> 후<br>'
+          + '홈 화면 아이콘으로 실행하면 전체화면으로 열립니다.', 9000);
+  }else if(IS_TOUCH){
+    fsToast('브라우저가 전체화면을 막고 있습니다.<br>'
+          + '브라우저 메뉴에서 <b>홈 화면에 추가</b> 후<br>'
+          + '아이콘으로 실행하면 전체화면으로 열립니다.', 9000);
+  }else{
+    fsToast('이 환경에서는 브라우저가 전체화면을 막고 있습니다.<br>'
+          + '<b>F11</b> 키를 누르면 전체화면이 됩니다.<br>'
+          + '(파일을 직접 열거나 로컬 서버로 열면 버튼도 동작합니다)');
+  }
+}
+
+/* 전체화면 요청 : 대상 요소를 바꿔가며 여러 번 시도한다.
+   환경에 따라 documentElement 는 막히고 body/canvas 는 되는 경우가 있다. */
+function requestFsChain(){
+  const targets = [document.documentElement, document.body,
+                   document.getElementById('stage'), document.getElementById('game')];
+  let i = 0;
+  const done = () => { lockLandscape(); updateFsBtn(); resize(); };
+  const tryNext = () => {
+    if(isFullscreen()){ done(); return; }
+    if(i >= targets.length){ fsBlocked(); return; }
+    const el = targets[i++];
+    if(!el){ tryNext(); return; }
+    const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+    if(!req){ tryNext(); return; }
+    let p = null;
+    try{ p = req.call(el, { navigationUI:'hide' }); }
+    catch(e){ tryNext(); return; }
+    if(p && p.then) p.then(done, tryNext);
+    else setTimeout(function(){ isFullscreen() ? done() : tryNext(); }, 160);
+  };
+  tryNext();
 }
 function toggleFullscreen(){
-  const el = document.documentElement;
   if(isFullscreen()){
     try{ if(screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); }catch(e){}
     try{
-      const ex = document.exitFullscreen || document.webkitExitFullscreen;
+      const ex = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
       if(ex) ex.call(document);
     }catch(e){}
+    setTimeout(function(){ updateFsBtn(); resize(); }, 120);
     return;
   }
-  const req = el.requestFullscreen || el.webkitRequestFullscreen;
-  if(!req || !document.fullscreenEnabled){ fsBlocked(); return; }
-  let p = null;
-  try{ p = req.call(el); }
-  catch(e){ fsBlocked(); return; }
-  if(p && p.then){
-    p.then(lockLandscape, fsBlocked);
-  }else{
-    // 구형 API 는 프로미스가 없으므로 잠시 뒤 상태로 판정
-    setTimeout(function(){ if(isFullscreen()) lockLandscape(); else fsBlocked(); }, 250);
+  if(isStandalone()){                      // 홈 화면 앱으로 실행 중이면 이미 전체화면
+    fsToast('이미 전체화면으로 실행 중입니다.', 2500);
+    return;
   }
+  requestFsChain();
+}
+function updateFsBtn(){
+  const b = document.getElementById('fsbtn');
+  if(!b) return;
+  b.textContent = isFullscreen() ? '전체화면 해제' : '전체화면';
 }
 
 /* 전체화면 아이콘 (네 모서리 꺾쇠). on=true 면 안쪽을 향하는 축소 아이콘 */
@@ -4067,8 +4126,7 @@ class OptionsScene extends Scene {
       { k:'BGM TRACK',     v:(Save.data.bgm+1) + '  ' + BGM_TRACKS[Save.data.bgm].name,
         set:d=>{ Save.data.bgm = (Save.data.bgm + d + BGM_TRACKS.length) % BGM_TRACKS.length;
                  SND.resume(); SND.switchBgm(Save.data.bgm); } },
-      { k:'FULLSCREEN',    v: !document.fullscreenEnabled ? 'BLOCKED - USE F11'
-                             : (isFullscreen() ? 'ON   (TAP / F)' : 'OFF  (TAP / F)'),
+      { k:'FULLSCREEN',    v: isFullscreen() ? 'ON   (TAP / F)' : 'OFF  (TAP / F)',
         act:()=>{ toggleFullscreen(); } },
       { k:'GAMEPAD',       v:Input.padName || 'NOT CONNECTED' },
       { k:'RESET PROGRESS',v:this.confirmReset > 0 ? 'ENTER AGAIN' : 'PRESS ENTER',
@@ -4412,6 +4470,15 @@ ctx.imageSmoothingEnabled = false;
 const rotateEl = document.getElementById('rotate');
 let portrait = false;
 
+const fsBtnEl = document.getElementById('fsbtn');
+function positionFsBtn(){
+  if(!fsBtnEl) return;
+  const r = canvas.getBoundingClientRect();
+  fsBtnEl.style.left = Math.round(r.right - fsBtnEl.offsetWidth - 18) + 'px';
+  fsBtnEl.style.top  = Math.round(r.top + 18) + 'px';
+  const t = document.getElementById('fstoast');
+  if(t) t.style.bottom = Math.max(16, Math.round(window.innerHeight - r.bottom + 28)) + 'px';
+}
 function resize(){
   const vw = window.innerWidth, vh = window.innerHeight;
   portrait = vh > vw;
@@ -4419,6 +4486,7 @@ function resize(){
   const scale = Math.min(vw / GAME_W, vh / GAME_H);
   canvas.style.width  = Math.floor(GAME_W * scale) + 'px';
   canvas.style.height = Math.floor(GAME_H * scale) + 'px';
+  positionFsBtn();
 }
 addEventListener('resize', resize);
 addEventListener('orientationchange', () => setTimeout(resize, 120));
@@ -4427,6 +4495,37 @@ resize();
 Save.load();
 optGet();
 Input.init(canvas);
+
+/* 홈 화면에 추가하면 전체화면으로 뜨도록 매니페스트를 동적으로 붙인다 (단일 파일 유지) */
+try{
+  const mf = { name:'DRAGON STRIKER', short_name:'DRAGON', display:'fullscreen',
+               orientation:'landscape', background_color:'#000000', theme_color:'#0a0616',
+               start_url:location.href.split('#')[0] };
+  const lk = document.createElement('link');
+  lk.rel = 'manifest';
+  lk.href = 'data:application/manifest+json;charset=utf-8,' + encodeURIComponent(JSON.stringify(mf));
+  document.head.appendChild(lk);
+}catch(e){}
+
+/* 전체화면 버튼 : 진짜 click 이벤트에서 직접 호출해야 브라우저가 허용한다 */
+if(fsBtnEl){
+  fsBtnEl.addEventListener('click', function(e){
+    e.preventDefault(); e.stopPropagation();
+    SND.resume(); SND.sfx('confirm');
+    toggleFullscreen();
+  });
+  updateFsBtn();
+}
+/* 세로 모드 안내의 버튼도 동일 동작 (폰에서 세로로 열었을 때의 진입점) */
+const rotFsEl = document.getElementById('rotfs');
+if(rotFsEl) rotFsEl.addEventListener('click', function(e){
+  e.preventDefault(); SND.resume(); toggleFullscreen();
+});
+for(const ev of ['fullscreenchange','webkitfullscreenchange']){
+  document.addEventListener(ev, function(){ updateFsBtn(); resize(); });
+}
+if(screen.orientation && screen.orientation.addEventListener)
+  screen.orientation.addEventListener('change', function(){ setTimeout(resize, 120); });
 
 const scenes = new SceneManager();
 scenes.set(new TitleScene());
@@ -4455,13 +4554,14 @@ function frame(now){
   if(steps === MAX_STEPS) acc = 0;                     // 과부하 시 시간 누적 폐기
 
   scenes.render(ctx);
-  if(FS_MSG_T > 0){                                    // 전체화면 실패 안내
-    FS_MSG_T -= dt;
-    const a = Math.min(1, FS_MSG_T / 0.5);
-    ctx.globalAlpha = a * 0.75; ctx.fillStyle = '#1a0a10';
-    ctx.fillRect(0, 596, GAME_W, 44); ctx.globalAlpha = 1;
-    drawText(ctx, FS_MSG, 640, 608, 3,
-      { align:'center', color:'#ff9a6a', outline:PAL.outline, shadow:'#000', alpha:a });
+  // 전체화면 버튼은 타이틀에서만 노출 (게임 중에는 우상단 아이콘 사용)
+  if(fsBtnEl){
+    const showFs = !portrait && !isStandalone() && scenes.current instanceof TitleScene;
+    const want = showFs ? 'block' : 'none';
+    if(fsBtnEl.style.display !== want){
+      fsBtnEl.style.display = want;
+      if(showFs){ positionFsBtn(); requestAnimationFrame(positionFsBtn); }  // 폭 확정 후 재배치
+    }
   }
   if(steps > 0) Input.endFrame();                      // 고주사율에서 입력 유실 방지
 
