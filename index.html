@@ -19,6 +19,11 @@
     touch-action:none; user-select:none; -webkit-user-select:none;
   }
   #stage{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:#000; }
+  /* 전체화면 API 가 막힌 모바일에서 주소창을 접기 위한 차선책 */
+  body.pfs{ overflow:auto; }
+  body.pfs #stage{ position:absolute; top:0; left:0; right:0; height:100dvh; }
+  body.pfs #spacer{ display:block; height:calc(100dvh + 120px); }
+  #spacer{ display:none; }
   #game{
     display:block; background:#000;
     image-rendering:pixelated; image-rendering:crisp-edges;
@@ -71,6 +76,7 @@
 </head>
 <body>
 <div id="stage"><canvas id="game" width="1280" height="720"></canvas></div>
+<div id="spacer"></div>
 <button id="fsbtn" type="button">전체화면</button>
 <div id="fstoast"></div>
 <div id="rotate">
@@ -3999,46 +4005,90 @@ function fsToast(html, ms){
   clearTimeout(_fsToastT);
   _fsToastT = setTimeout(function(){ el.style.display = 'none'; }, ms || 6000);
 }
+let FS_ERR = '';                       // 마지막 실패 사유 (추측하지 않고 실제 오류를 보여준다)
+function fsDiag(){
+  return '<span style="font-size:12px;color:#8a7bb8">'
+       + location.protocol + ' / fsEnabled=' + document.fullscreenEnabled
+       + (FS_ERR ? ' / ' + FS_ERR : '') + '</span>';
+}
+
+/* 안드로이드 크롬 등에서 전체화면 API 가 막혔을 때의 차선책:
+   페이지를 살짝 스크롤 가능하게 만들어 주소창을 접는다. */
+function pseudoFullscreen(){
+  document.body.classList.add('pfs');
+  const go = () => window.scrollTo(0, 1);
+  go(); setTimeout(go, 60); setTimeout(go, 260);
+  setTimeout(resize, 340);
+}
+function exitPseudoFullscreen(){
+  document.body.classList.remove('pfs');
+  window.scrollTo(0, 0);
+  setTimeout(resize, 120);
+}
+function isPseudo(){ return document.body.classList.contains('pfs'); }
+
 /* 환경별로 실제로 통하는 방법을 안내한다 */
 function fsBlocked(){
-  if(IS_IOS){
-    fsToast('아이폰 사파리는 전체화면 기능을 막아두었습니다.<br>'
+  const isFile = location.protocol === 'file:';
+  if(isFile && IS_TOUCH){
+    // 안드로이드/아이폰에서 파일을 직접 연 경우 - 이게 가장 흔한 원인
+    pseudoFullscreen();
+    fsToast('휴대폰에서 <b>파일을 직접 열면</b> 브라우저가 전체화면을 막습니다.<br>'
+          + 'PC에서 아래를 실행하고, 폰에서 그 주소로 접속하세요.<br>'
+          + '<b>python -m http.server 8000</b><br>'
+          + '→ 폰 브라우저에 <b>http://(PC아이피):8000</b> 입력<br>'
+          + '(우선 주소창만 접어두었습니다)<br>' + fsDiag(), 13000);
+  }else if(isFile){
+    pseudoFullscreen();
+    fsToast('파일을 직접 열면 브라우저가 전체화면을 막습니다.<br>'
+          + '<b>F11</b> 키를 누르거나, 로컬 서버로 열어주세요.<br>'
+          + '<b>python -m http.server 8000</b> → http://localhost:8000<br>' + fsDiag());
+  }else if(IS_IOS){
+    pseudoFullscreen();
+    fsToast('아이폰 사파리는 전체화면 API 를 지원하지 않습니다.<br>'
           + '공유 버튼 → <b>홈 화면에 추가</b> 후<br>'
-          + '홈 화면 아이콘으로 실행하면 전체화면으로 열립니다.', 9000);
+          + '홈 화면 아이콘으로 실행하면 전체화면으로 열립니다.<br>' + fsDiag(), 11000);
   }else if(IS_TOUCH){
-    fsToast('브라우저가 전체화면을 막고 있습니다.<br>'
-          + '브라우저 메뉴에서 <b>홈 화면에 추가</b> 후<br>'
-          + '아이콘으로 실행하면 전체화면으로 열립니다.', 9000);
+    pseudoFullscreen();
+    fsToast('브라우저가 전체화면을 막고 있어 주소창만 접었습니다.<br>'
+          + '브라우저 메뉴 → <b>홈 화면에 추가</b> 후 아이콘으로 실행하면<br>'
+          + '완전한 전체화면으로 열립니다.<br>' + fsDiag(), 11000);
   }else{
     fsToast('이 환경에서는 브라우저가 전체화면을 막고 있습니다.<br>'
-          + '<b>F11</b> 키를 누르면 전체화면이 됩니다.<br>'
-          + '(파일을 직접 열거나 로컬 서버로 열면 버튼도 동작합니다)');
+          + '<b>F11</b> 키를 누르면 전체화면이 됩니다.<br>' + fsDiag());
   }
 }
 
 /* 전체화면 요청 : 대상 요소를 바꿔가며 여러 번 시도한다.
    환경에 따라 documentElement 는 막히고 body/canvas 는 되는 경우가 있다. */
 function requestFsChain(){
+  FS_ERR = '';
   const targets = [document.documentElement, document.body,
                    document.getElementById('stage'), document.getElementById('game')];
   let i = 0;
-  const done = () => { lockLandscape(); updateFsBtn(); resize(); };
+  const done = () => { exitPseudoFullscreen(); lockLandscape(); updateFsBtn(); resize(); };
+  const fail = (e) => {
+    // 첫 실패 사유만 기록한다. 이후 시도는 제스처가 소진돼 사유가 달라지기 때문
+    if(!FS_ERR && e) FS_ERR = (e.name || 'Error') + ': ' + String(e.message || e).slice(0, 60);
+    tryNext();
+  };
   const tryNext = () => {
     if(isFullscreen()){ done(); return; }
     if(i >= targets.length){ fsBlocked(); return; }
     const el = targets[i++];
     if(!el){ tryNext(); return; }
     const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
-    if(!req){ tryNext(); return; }
+    if(!req){ fail({ name:'Unsupported', message:'requestFullscreen 없음' }); return; }
     let p = null;
     try{ p = req.call(el, { navigationUI:'hide' }); }
-    catch(e){ tryNext(); return; }
-    if(p && p.then) p.then(done, tryNext);
-    else setTimeout(function(){ isFullscreen() ? done() : tryNext(); }, 160);
+    catch(e){ fail(e); return; }
+    if(p && p.then) p.then(done, fail);
+    else setTimeout(function(){ isFullscreen() ? done() : fail(null); }, 160);
   };
   tryNext();
 }
 function toggleFullscreen(){
+  if(isPseudo() && !isFullscreen()){ exitPseudoFullscreen(); updateFsBtn(); return; }
   if(isFullscreen()){
     try{ if(screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); }catch(e){}
     try{
@@ -4057,7 +4107,7 @@ function toggleFullscreen(){
 function updateFsBtn(){
   const b = document.getElementById('fsbtn');
   if(!b) return;
-  b.textContent = isFullscreen() ? '전체화면 해제' : '전체화면';
+  b.textContent = (isFullscreen() || isPseudo()) ? '전체화면 해제' : '전체화면';
 }
 
 /* 전체화면 아이콘 (네 모서리 꺾쇠). on=true 면 안쪽을 향하는 축소 아이콘 */
