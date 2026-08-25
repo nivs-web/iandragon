@@ -265,6 +265,15 @@ function bakeText(text, s, opt){
   paintText(c, text, pad, pad, s, opt);
   return { cv, ox: pad, oy: pad, w };
 }
+/* 매 프레임 값이 바뀌는 숫자용. 문자열 통째로 캐시하면 값이 바뀔 때마다
+   새로 구워야 해서 캐시가 오히려 손해다. 글자 단위로 그리면 0~9 열 장이면 끝난다. */
+function drawDigits(ctx, str, x, y, s, opt){
+  str = String(str);
+  const sp = (opt && opt.spacing !== undefined) ? opt.spacing : s;
+  const step = FONT_W*s + sp;
+  for(let i=0;i<str.length;i++) drawText(ctx, str[i], x + i*step, y, s, opt);
+  return str.length*step - sp;
+}
 function drawText(ctx, text, x, y, s, opt){
   opt = opt || {};
   text = String(text).toUpperCase();
@@ -494,6 +503,11 @@ const SND = {
       case 'gameover':
         [72,68,64,59].forEach((n,i) => this.tone(midiFreq(n), t + i*0.20, 0.42, 'triangle', 0.22));
         this.noise(t, 0.9, 0.14, 700, 90);
+        break;
+      case 'coin':                         // 황금동전 : 짧고 밝은 "칭"
+        if(!this._gate('coin', 30)) return;
+        this.tone(midiFreq(93), t, 0.045, 'square', 0.13);
+        this.tone(midiFreq(100), t + 0.04, 0.09, 'square', 0.12);
         break;
       case 'shield':                       // 쉴드 전개 : 차오르는 배음
         [64,71,76,83].forEach((n,i) =>
@@ -1180,22 +1194,27 @@ const FORMS = {
 };
 
 /* 불 레벨 1~10 성장 테이블.
-   크기는 전 레벨 고정(약 210x196). 레벨이 오르면 파츠만 붙는다.
-   예전엔 cell 이 5->8 로 커졌는데, 커질수록 피격 판정도 같이 커져서
-   고레벨이 오히려 불리했고 무엇보다 재미가 없었다. */
+   크기는 전 레벨 완전 고정 (그려지는 실루엣 210 x 186).
+   FORM B(큰뿔+갑주 내장)를 처음부터 쓰고 cell 도 고정이라 레벨이 올라도
+   1픽셀도 커지지 않는다. 예전엔 Lv2 에서 뿔이 붙으며 높이가 154->175 로,
+   Lv6 에서 폼이 바뀌며 175->186 으로 커져서 "점점 커진다" 는 인상을 줬다.
+   등가시(Lv4)와 꼬리칼날(Lv9)은 몸통 실루엣 안쪽이라 크기를 바꾸지 않는다. */
 const GROWTH = [
   null,
-  { form:'A', cell:7, parts:[] },                  // Lv1  210 x 196
-  { form:'A', cell:7, parts:['crest'] },           // Lv2  뿔이 남
-  { form:'A', cell:7, parts:['crest'] },           // Lv3
-  { form:'A', cell:7, parts:['crest','ridge'] },   // Lv4  등가시
-  { form:'A', cell:7, parts:['crest','ridge'] },   // Lv5
-  { form:'B', cell:6, parts:[] },                  // Lv6  216 x 192  성체 (큰뿔+갑주 내장)
-  { form:'B', cell:6, parts:['ridge'] },           // Lv7  등가시
-  { form:'B', cell:6, parts:['ridge'] },           // Lv8
-  { form:'B', cell:6, parts:['ridge','tail'] },    // Lv9  꼬리 칼날
-  { form:'B', cell:6, parts:['ridge','tail'] }     // Lv10 최대
+  { form:'B', cell:6, parts:[] },   // Lv1
+  { form:'B', cell:6, parts:[] },   // Lv2
+  { form:'B', cell:6, parts:[] },   // Lv3
+  { form:'B', cell:6, parts:[] },   // Lv4
+  { form:'B', cell:6, parts:[] },   // Lv5
+  { form:'B', cell:6, parts:[] },   // Lv6
+  { form:'B', cell:6, parts:[] },   // Lv7
+  { form:'B', cell:6, parts:[] },   // Lv8
+  { form:'B', cell:6, parts:[] },   // Lv9
+  { form:'B', cell:6, parts:[] }    // Lv10
 ];
+// 레벨로 붙는 파츠도 없앴다. 파츠 하나가 실루엣을 한 칸 넘기면
+// 그것만으로 "커졌다" 로 보인다. 캐릭터 생김새는 고른 드래곤이 전부 결정하고,
+// 레벨 성장은 불줄기(1줄 26px -> 12줄 228px)가 전부 보여준다.
 const MAX_LEVEL = 10;
 function growthOf(level){ return GROWTH[clamp(level|0, 1, MAX_LEVEL)]; }
 function formOf(level){ return FORMS[growthOf(level).form]; }
@@ -1326,11 +1345,14 @@ class Player {
     this.shieldT = 0; this.shieldHits = [];   // 필살기 쉴드 남은 시간 / 튕겨낸 자국
     this.missileCount = 0; this.bombCount = 0;
     this.combo = 0; this.comboT = 0; this.fireT = 0;
+    this.score = 0;                        // 플레이어별 점수
+    this.coinChain = 0; this.coinT = 0;    // 황금동전 연쇄
   }
   get dragon(){ return DRAGONS[this.dragonIdx]; }
-  /* 쉴드 : 몸통(피격 판정) 을 감싸고 앞쪽으로 조금 나간 원 */
-  get shieldR(){ const b = this.hitbox; return Math.hypot(b.w, b.h)*0.62 + 44; }
-  get shieldC(){ const b = this.hitbox; return { x: b.x + b.w/2 + 16, y: b.y + b.h/2 }; }
+  /* 쉴드 : 캐릭터 전체를 넉넉히 감싸는 원.
+     몸통 판정만 감싸면 눈에 잘 안 띄어서 쉴드가 켜진 줄 모른다. */
+  get shieldR(){ const m = this.metrics; return Math.hypot(m.w, m.h)*0.5 + 8; }
+  get shieldC(){ return { x: this.x, y: this.y }; }
   /* 입 끝 (불이 나오는 지점) */
   get muzzle(){
     const g = growthOf(this.level), f = FORMS[g.form];
@@ -1817,32 +1839,34 @@ class Boom {
 }
 
 /* ---------------- 파이어 블레스 (자동 연사) ---------------- */
-const FIRE_INTERVAL = 0.06;                  // 초당 16.7발 (더 촘촘하게)
+const FIRE_INTERVAL = 0.10;                  // 초당 10발.
+/* 예전엔 0.06(초당 16.7발)이라 Lv10 에서 화면에 불줄기가 26개나 깔렸다.
+   한 발은 260x270 스프라이트라 그것만으로 프레임당 2화면분을 칠하고 있었다.
+   간격을 늘리고 한 방 데미지를 그만큼 올려 DPS 는 1도 달라지지 않게 했다.
+   대신 줄기 길이를 늘려 발과 발 사이가 끊겨 보이지 않게 맞췄다. */
 /* 레벨별 불줄기.
-   n  = 나란히 붙어서 나가는 줄 수 (벌어지지 않고 서로 맞닿아 한 덩어리로 보인다)
-   bt = 줄 하나의 두께.  전체 두께 th = n * bt
-   Lv6 부터는 줄당 두께를 조금씩 줄여 촘촘하게 쌓아 올린다.
-   한 발 = 오브젝트 1개다. 줄 수만큼 오브젝트를 만들면 고레벨에서 배로 느려진다. */
+   n  = 나란히 붙어서 나가는 줄 수 (벌어지지 않고 서로 맞닿아 한 덩어리)
+   bt = 줄 하나의 두께.  전체 두께 th = n * bt */
 const FIRE = [ null,
-  { n: 1, bt:26.0, th: 26, dmg:  11.0, spd:1500, pierce:0 , len:100 },  // Lv1   1줄 x 26.0 = 26px
-  { n: 2, bt:26.0, th: 52, dmg:  13.2, spd:1500, pierce:0 , len:112 },  // Lv2   2줄 x 26.0 = 52px
-  { n: 3, bt:26.0, th: 78, dmg:  15.8, spd:1520, pierce:1 , len:126 },  // Lv3   3줄 x 26.0 = 78px
-  { n: 5, bt:24.0, th:120, dmg:  19.0, spd:1520, pierce:1 , len:142 },  // Lv4   5줄 x 24.0 = 120px
-  { n: 6, bt:23.0, th:138, dmg:  22.8, spd:1560, pierce:2 , len:160 },  // Lv5   6줄 x 23.0 = 138px
-  { n: 7, bt:22.0, th:154, dmg:  27.4, spd:1560, pierce:3 , len:180 },  // Lv6   7줄 x 22.0 = 154px
-  { n: 8, bt:21.0, th:168, dmg:  32.8, spd:1620, pierce:4 , len:200 },  // Lv7   8줄 x 21.0 = 168px
-  { n: 9, bt:20.5, th:184, dmg:  39.4, spd:1620, pierce:6 , len:222 },  // Lv8   9줄 x 20.5 = 184px
-  { n:10, bt:20.0, th:200, dmg:  47.3, spd:1700, pierce:8 , len:240 },  // Lv9  10줄 x 20.0 = 200px
-  { n:12, bt:19.0, th:228, dmg:  56.8, spd:1800, pierce:99, len:260 }   // Lv10 12줄 x 19.0 = 228px
+  { n: 1, bt:26.0, th: 26, dmg:  18.3, spd:1500, pierce:0 , len:170 },  // Lv1   1줄= 26px 간격150<길이170
+  { n: 2, bt:26.0, th: 52, dmg:  22.0, spd:1500, pierce:0 , len:178 },  // Lv2   2줄= 52px 간격150<길이178
+  { n: 3, bt:26.0, th: 78, dmg:  26.4, spd:1520, pierce:1 , len:186 },  // Lv3   3줄= 78px 간격152<길이186
+  { n: 5, bt:24.0, th:120, dmg:  31.7, spd:1520, pierce:1 , len:196 },  // Lv4   5줄=120px 간격152<길이196
+  { n: 6, bt:23.0, th:138, dmg:  38.0, spd:1560, pierce:2 , len:206 },  // Lv5   6줄=138px 간격156<길이206
+  { n: 7, bt:22.0, th:154, dmg:  45.6, spd:1560, pierce:3 , len:216 },  // Lv6   7줄=154px 간격156<길이216
+  { n: 8, bt:21.0, th:168, dmg:  54.7, spd:1620, pierce:4 , len:226 },  // Lv7   8줄=168px 간격162<길이226
+  { n: 9, bt:20.5, th:184, dmg:  65.7, spd:1620, pierce:6 , len:236 },  // Lv8   9줄=184px 간격162<길이236
+  { n:10, bt:20.0, th:200, dmg:  78.8, spd:1700, pierce:8 , len:248 },  // Lv9  10줄=200px 간격170<길이248
+  { n:12, bt:19.0, th:228, dmg:  94.6, spd:1800, pierce:99, len:260 }   // Lv10 12줄=228px 간격180<길이260
 ];
 
 class FireBolt {
-  constructor(x, y, vy, lv){
+  constructor(x, y, vy, lv, pid){
     const c = FIRE[lv];
     this.x = x; this.y = y;
     this.vx = c.spd; this.vy = vy;
     this.th = c.th; this.len = c.len; this.dmg = c.dmg;
-    this.pierce = c.pierce; this.lv = lv;
+    this.pierce = c.pierce; this.lv = lv; this.pid = pid || 1;
     this.ph = Math.random()*Math.PI*2;
     this.t = 0; this.dead = false;
     this.hitSet = null;                       // 관통 시 중복 타격 방지
@@ -1980,7 +2004,7 @@ class Arrow {
 class WingZombie {
   constructor(x, y, speed){
     this.x = x; this.y = y;
-    this.hp = 22; this.maxHp = 22;      // 불 1발
+    this.hp = this.maxHp = enemyHp(30);      // 스테이지에 비례해 단단해진다
     this.vx = -(speed || 175); this.vy = 0;
     this.t = Math.random()*6;
     this.baseY = y;
@@ -2012,6 +2036,7 @@ class WingZombie {
     if(this.x < -Z_W) this.dead = true;
   }
   hit(dmg, bolt, scene){
+    if(bolt && bolt.pid) this.killPid = bolt.pid;      // 마지막으로 때린 사람에게 점수
     this.hp -= dmg;
     this.flash = 0.09;
     this.knock = 260;
@@ -2022,7 +2047,7 @@ class WingZombie {
   }
   die(scene){
     this.dead = true; this.killed = true;
-    scene.score += this.score;
+    scene.addScore(this.score, this.killPid);
     scene.booms.push(new Boom(this.x, this.y, 62, 0.36));
     scene.waves.push(new Shockwave(this.x, this.y, 150, 0.26));
     Particles.spawn(this.x, this.y, 26, { spd:460, life:0.55 });
@@ -2283,6 +2308,7 @@ class EnemyBase {
     if(this.animT >= (rate || 0.11)){ this.animT = 0; this.pose = this.pose === 0 ? 3 : 0; }
   }
   hit(dmg, bolt, scene){
+    if(bolt && bolt.pid) this.killPid = bolt.pid;      // 마지막으로 때린 사람에게 점수
     this.hp -= dmg;
     this.flash = 0.09;
     this.knock = this.isBoss ? 60 : 220;
@@ -2302,7 +2328,7 @@ class EnemyBase {
 const DR_CELL = 3.6;                                 // FORM A x3.6 = 108 x 101 (+20%)
 class DragonRider extends EnemyBase {
   constructor(x, y){
-    super(x, y, 66, 300);        // 불 3발
+    super(x, y, enemyHp(84), 300);
     this.vx = -(150 + Math.random()*50);
     this.shootT = 1.0 + Math.random()*1.4;
   }
@@ -2350,7 +2376,7 @@ class DragonRider extends EnemyBase {
 const HV_CELL = 4.8;                                 // FORM A x4.8 = 144 x 134 (+20%)
 class HeavyRider extends EnemyBase {
   constructor(x, y){
-    super(x, y, 176, 800);       // 불 8발
+    super(x, y, enemyHp(220), 800);
     this.vx = -(95 + Math.random()*35);
     this.missileT = 1.6 + Math.random()*1.0;
     this.bombT    = 2.6 + Math.random()*1.2;
@@ -2808,6 +2834,12 @@ const MID_BOSS_BASE = 3200, BOSS_MUL = 2.4;
    1스테이지와 20스테이지 보스가 똑같으면 스테이지를 올라갈 이유가 없다.
    20스테이지 기준 2.53배. */
 function stagePowerOf(stage){ return Math.pow(1.05, clamp(stage|0, 1, 20) - 1); }
+/* 일반 적의 맷집도 스테이지에 비례해 오른다.
+   이게 없으면 고스테이지에서도 불 몇 방에 녹아버려 난이도가 그대로다.
+   S20 기준 4.3배. */
+function enemyToughOf(stage){ return Math.pow(1.08, clamp(stage|0, 1, 20) - 1); }
+let CUR_STAGE = 1;                  // 적 생성 시 참조할 현재 스테이지
+function enemyHp(base){ return Math.round(base * enemyToughOf(CUR_STAGE)); }
 function midBossHpOf(stage, level){
   return Math.round(MID_BOSS_BASE * bossPowerScale(level || 1) * stagePowerOf(stage));
 }
@@ -2817,7 +2849,7 @@ function bossHpOf(stage, level){ return Math.round(midBossHpOf(stage, level) * B
    "3회 발사(3+6+9 = 18발)로 중간보스 격파" 가 되도록 1발 데미지를 정한다.
    같은 데미지로 최종보스는 6회 발사(누적 45발) 분량이 된다. */
 const MISSILE_VOLLEYS_TO_KILL_MID = 3;
-const MAX_MISSILE = 20, MAX_BOMB = 5;      // 보유 상한
+const MAX_MISSILE = 40, MAX_BOMB = 5;      // 보유 상한
 function missileDamageOf(stage, level){
   // 1회 발사가 3발(연속 시 6/9발)이라 한 방이 너무 강했다. 기존의 1/3 로 낮춤
   return midBossHpOf(stage, level) / 54;
@@ -2929,7 +2961,7 @@ class PlayerMissile {
       if(e.dead) continue;
       const b = e.box, cx = b.x + b.w/2, cy = b.y + b.h/2;
       if(Math.hypot(cx - this.x, cy - this.y) <= MISSILE.BLAST + Math.max(b.w, b.h)*0.35){
-        e.hit(this.dmg, null, scene);
+        e.hit(this.dmg, this, scene);
         if(e.dead) scene.kills++;
       }
     }
@@ -2945,7 +2977,7 @@ class PlayerMissile {
 }
 
 /* 아군 미사일 16방향 스프라이트 (쓰이는 방향만 그때그때 굽는다) */
-const MSL_SPR = 112;
+const MSL_SPR = 112;  // 그림이 x -52..32 로 뻗어 회전 반경이 56 이다. 더 줄이면 잘린다.
 const _mslSprites = [];
 function missileSprite(i){
   const hit = _mslSprites[i];
@@ -3003,7 +3035,7 @@ function drawShield(ctx, p){
   const c = p.shieldC, R = p.shieldR, T = p.shieldT;
   const col = p.pid === 1 ? '#6ec8ff' : '#ff9ae0';
   // 꺼지기 2초 전부터 깜빡여서 남은 시간을 알린다
-  const fade = T < 2 ? 0.35 + Math.abs(Math.sin(T*11))*0.65 : 1;
+  const fade = T < 3 ? 0.35 + Math.abs(Math.sin(T*11))*0.65 : 1;
   ctx.globalAlpha = 0.12 * fade;
   fillPixelCircle(ctx, c.x, c.y, R, col);
   ctx.globalAlpha = 0.9 * fade;
@@ -3034,13 +3066,14 @@ function drawShield(ctx, p){
 
 const BOMB_FX = { CHARGE:0.32, FLASH:0.46, FIREBALL:1.15, WAVE:1.70, TOTAL:2.20 };
 const BOMB_R  = 360;                // 화구 최대 반경 (화면 면적의 약 1/2)
-const SHIELD_TIME = 10;             // 필살기 사용 후 무적 쉴드 지속 시간(초)
+const SHIELD_TIME = 15;             // 필살기 사용 후 무적 쉴드 지속 시간(초)
 
 class DragonRoar {
   constructor(scene, owner){
     this.t = 0; this.applied = false; this.dead = false;
     const o = owner || scene.p1;
     this.owner = o;                    // 누구의 필살기인지 (2인 플레이에서 서로 막지 않도록)
+    this.pid = o.pid;                  // 이걸로 죽인 적의 점수는 이 사람 몫
     this.px = o.x; this.py = o.y;
     this.ringN = 0;
     this.debris = [];
@@ -3078,9 +3111,9 @@ class DragonRoar {
       for(const e of scene.enemies){
         if(e.dead) continue;
         if(e.isBoss){
-          e.hit(e.maxHp * 0.42, null, scene);   // 연출은 줄이고 위력은 올린다
+          e.hit(e.maxHp * 0.42, this, scene);   // 연출은 줄이고 위력은 올린다
         }else{
-          e.hit(99999, null, scene);
+          e.hit(99999, this, scene);
           if(e.dead) scene.kills++;
         }
       }
@@ -3192,13 +3225,17 @@ class DragonRoar {
 /* ==================================================================
    아이템
    ================================================================== */
-const ITEM_KIND = { APPLE:'apple', HEART:'heart', MISSILE:'missile', BOMB:'bomb', POWER:'power' };
+const ITEM_KIND = { APPLE:'apple', HEART:'heart', MISSILE:'missile', BOMB:'bomb',
+                    POWER:'power', COIN:'coin' };
+const COIN_BASE = 100;              // 연속으로 먹을수록 배수가 붙는다
+const COIN_CHAIN_MAX = 10;
+const COIN_WINDOW = 2.2;            // 이 안에 다음 동전을 먹으면 연쇄 유지
 const ITEM_R = 26;                                    // 획득 반경 (넉넉하게)
 
 const ITEM_BIG_R = 58;                     // LvUp 은 필살기 버튼만큼 큼직하게
 class Item {
   constructor(x, y, kind){
-    this.r = kind === ITEM_KIND.POWER ? ITEM_BIG_R : ITEM_R;
+    this.r = kind === ITEM_KIND.POWER ? ITEM_BIG_R : (kind === ITEM_KIND.COIN ? 19 : ITEM_R);
     // 보스가 돌진으로 화면 밖에 있을 때 죽어도 회수 가능하도록 화면 안으로 보정
     this.x = clamp(x, 90, GAME_W - 90);
     this.y = clamp(y, 80, GAME_H - 80);
@@ -3214,14 +3251,25 @@ class Item {
   }
   render(ctx){
     const x = snap(this.x), y = snap(this.y + Math.sin(this.t*3)*3);
-    // 후광
-    ctx.globalAlpha = 0.28 + Math.sin(this.t*6)*0.12;
-    fillPixelCircle(ctx, x, y, this.r, '#ffffff');
-    ctx.globalAlpha = 1;
+    // 후광 (동전은 스스로 번쩍이므로 생략 -> 동전이 많이 깔려도 부담이 없다)
+    if(this.kind !== ITEM_KIND.COIN){
+      ctx.globalAlpha = 0.28 + Math.sin(this.t*6)*0.12;
+      fillPixelCircle(ctx, x, y, this.r, '#ffffff');
+      ctx.globalAlpha = 1;
+    }
     // 사라지기 직전 점멸
     if(this.life < 3 && Math.floor(this.life*8) % 2 === 0) return;
 
     switch(this.kind){
+      case ITEM_KIND.COIN: {
+        const sp = Math.abs(Math.sin(this.t*3.4));           // 회전하는 느낌
+        const w = Math.max(PX, snap(20*sp) || PX);
+        ctx.fillStyle = '#6b4a08'; ctx.fillRect(x - w/2 - PX, y - 18, w + PX*2, 36);
+        ctx.fillStyle = '#ffd24a'; ctx.fillRect(x - w/2, y - 15, w, 30);
+        ctx.fillStyle = '#fff3b0'; ctx.fillRect(x - w/2, y - 15, w, PX*2);
+        if(w > PX*3){ ctx.fillStyle = '#c8880f'; ctx.fillRect(x - w/2 + PX, y - PX, w - PX*2, PX*2); }
+        break;
+      }
       case ITEM_KIND.APPLE:
         fillPixelCircle(ctx, x, y + 2, 15, '#d92b3a');
         fillPixelCircle(ctx, x - 5, y - 3, 5, '#ff6b6b');
@@ -3657,8 +3705,15 @@ const SKY_TEST = [
   {p:0.72,c:'#69b6c6'},{p:0.86,c:'#a4d9c8'},{p:1.00,c:'#dcefc4'}
 ];
 const MAX_LIVES = 10;
-const BOMB_ITEM_INTERVAL = 16;      // 16초마다 필살기 구슬 등장
-const BOMB_ITEM_ROUNDS   = 3;       // 정기 투하 3회 + 최종보스 드롭 1개 = 1인당 총 4개
+/* 한 스테이지에서 "1명당" 나오는 아이템 개수. 스테이지나 적 수와 무관하게 고정.
+   물량이 아니라 위치를 노려서 먹게 만들고, 그 사이는 황금동전으로 채운다. */
+const DROP_PLAN = [
+  { kind:'missile', rounds:10, every: 6.5, first: 4 },   // 1인당 10개
+  { kind:'apple',   rounds:10, every: 6.5, first: 7 },   // 1인당 10개
+  { kind:'bomb',    rounds: 3, every:16.0, first:16 }    // +최종보스 1 = 1인당 4개
+];
+const COIN_INTERVAL = 2.6;          // 황금동전 뭉치가 나오는 주기
+const COIN_PER_ARC  = 6;            // 한 뭉치에 몇 개
 const STAGE_TIME = 90;              // 중간보스가 나올 때까지의 제한 시간 (초).
                                     // 보스가 등장하면 타이머는 멈춘다. 보스전은 시간제한 없이.
 const TIME_BAR = { x: 400, y: 16, w: 480, h: 26 };   // 상단 중앙 시간 게이지 (터치 시 일시정지)
@@ -3669,6 +3724,7 @@ class GameScene extends Scene {
   constructor(stage, carry){
     super();
     this.stageNo = clamp(stage || 1, 1, 20);
+    CUR_STAGE = this.stageNo;         // 적 생성자가 참조한다
     this.carry = carry || null;
   }
   enter(){
@@ -3697,6 +3753,7 @@ class GameScene extends Scene {
                  : (this.p2 = new Player(320, GAME_H/2 + 90, c.level, c.dragonIdx, 2));
         np.dragonIdx = c.dragonIdx; np.level = c.level;
         np.lives = c.lives; np.hp = c.hp; np.out = false;
+        np.score = c.score || 0;                     // 점수도 이어진다
         np.missileCount = c.missileCount; np.bombCount = c.bombCount;
       }
       this.p1UsesKeysCarry = this.carry.p1UsesKeys;
@@ -3737,7 +3794,10 @@ class GameScene extends Scene {
     this.score = this.carry ? this.carry.score : 0;
     this.kills = 0;
     this.boss = null; this.bossBannerT = 0; this.bossDeathT = 0;
-    this.killStreak = 0; this.bombItemT = BOMB_ITEM_INTERVAL; this.bombItemsLeft = BOMB_ITEM_ROUNDS;
+    this.killStreak = 0;
+    // 아이템 투하 예약표 (인원수만큼 위아래로 나눠 떨어진다)
+    this.dropQ = DROP_PLAN.map(d => ({ kind:d.kind, left:d.rounds, t:d.first, every:d.every }));
+    this.coinT = 3.0; this.heartDropped = false;
     this.pickupMsg = null; this.pickupT = 0;
     Freeze.reset(); Flash.reset(); Popups.clear();
 
@@ -3830,13 +3890,15 @@ class GameScene extends Scene {
 
   onEnemyKilled(e){
     if(e instanceof MidBoss){
-      // 파이어 레벨을 올릴 수 있는 유일한 기회. 하트도 여기서 준다.
-      // 인원수만큼 위아래로 벌려 사이좋게 하나씩 먹도록.
+      // 파이어 레벨을 올릴 수 있는 유일한 기회.
+      // 하트는 한 스테이지에 1명당 딱 1개. 중간보스가 2마리여도 처음 한 번만.
       const n = this.players().length;
+      const giveHeart = !this.heartDropped;
+      this.heartDropped = true;
       for(let i=0;i<n;i++){
         const dy = (i - (n-1)/2)*300;
         this.items.push(new Item(e.x - 80, e.y + dy, ITEM_KIND.POWER));
-        this.items.push(new Item(e.x + 80, e.y + dy, ITEM_KIND.HEART));
+        if(giveHeart) this.items.push(new Item(e.x + 80, e.y + dy, ITEM_KIND.HEART));
       }
       return;
     }
@@ -3847,15 +3909,26 @@ class GameScene extends Scene {
         this.items.push(new Item(e.x, e.y + (i - (n-1)/2)*300, ITEM_KIND.BOMB));
       return;
     }
+    // 잡몹은 아이템을 떨구지 않는다. 적이 늘어난다고 아이템까지 늘면
+    // 먹는 재미가 사라진다. 대신 가끔 황금동전 하나를 남긴다.
     this.killStreak++;
-    if(this.killStreak % 3 === 0) this.items.push(new Item(e.x, e.y, ITEM_KIND.MISSILE));
-    else if(Math.random() < 0.15) this.items.push(new Item(e.x, e.y, ITEM_KIND.APPLE));
+    if(this.killStreak % 4 === 0) this.items.push(new Item(e.x, e.y, ITEM_KIND.COIN));
   }
 
   pickup(it, who){
     const p = who || this.p1;
     let msg = '';
     switch(it.kind){
+      case ITEM_KIND.COIN: {
+        p.coinChain = (p.coinT > 0) ? Math.min(COIN_CHAIN_MAX, p.coinChain + 1) : 1;
+        p.coinT = COIN_WINDOW;
+        const gain = COIN_BASE * p.coinChain;
+        this.addScore(gain, p.pid);
+        Popups.add(it.x, it.y - 20, '+' + gain + (p.coinChain > 1 ? ' x' + p.coinChain : ''),
+                   '#ffd24a', p.coinChain > 4 ? 4 : 3);
+        SND.sfx('coin');
+        return;                                  // 동전은 안내 문구를 띄우지 않는다
+      }
       case ITEM_KIND.APPLE:   p.hp = Math.min(100, p.hp + 20); msg = 'HP +20%'; break;
       case ITEM_KIND.HEART:   p.lives = Math.min(MAX_LIVES, p.lives + 1); msg = 'LIFE +1'; break;
       case ITEM_KIND.MISSILE:
@@ -3903,6 +3976,11 @@ class GameScene extends Scene {
     this.stick.up(this.stick.pid);
     if(kind === 'clear'){
       this.bonus = Math.round(this.timeLeft) * 100 + this.totalLives() * 500;
+      const alive = this.players();
+      if(alive.length){
+        const each = Math.round(this.bonus / alive.length);
+        for(const p of alive) p.score += each;
+      }
       this.score += this.bonus;
       for(const p of this.allPlayers()) if(!p.out) p.lives = Math.min(MAX_LIVES, p.lives + 1);
       SND.sfx('fanfare');
@@ -3936,13 +4014,19 @@ class GameScene extends Scene {
     }
   }
   /* 다음 스테이지로 그대로 넘길 상태 */
+  /* 점수는 씬 합계와 플레이어별로 같이 쌓는다 */
+  addScore(v, pid){
+    this.score += v;
+    const p = pid === 2 ? this.p2 : (pid === 1 ? this.p1 : null);
+    if(p) p.score += v;
+  }
   makeCarry(){
     return {
       score: this.score,
       p1UsesKeys: this.p1UsesKeys,
       players: this.allPlayers().filter(p => !p.out).map(p => ({
         pid: p.pid, dragonIdx: p.dragonIdx, level: p.level,
-        lives: p.lives, hp: p.hp,
+        lives: p.lives, hp: p.hp, score: p.score,
         missileCount: p.missileCount, bombCount: p.bombCount
       }))
     };
@@ -4007,6 +4091,7 @@ class GameScene extends Scene {
       if(p.shieldT <= 0){ p.shieldT = 0; p.shieldHits.length = 0; SND.sfx('deny'); }
     }
     if(p.comboT > 0) p.comboT -= dt;
+    if(p.coinT > 0){ p.coinT -= dt; if(p.coinT <= 0) p.coinChain = 0; }
 
     // 파이어 블레스 (자동 연사)
     const c = FIRE[p.level];
@@ -4014,7 +4099,7 @@ class GameScene extends Scene {
     if(p.fireT <= 0){
       p.fireT += FIRE_INTERVAL;
       const m = p.muzzle;
-      this.bolts.push(new FireBolt(m.x, m.y, 0, p.level));
+      this.bolts.push(new FireBolt(m.x, m.y, 0, p.level, p.pid));
       Particles.spawn(m.x, m.y, 2, { ang:0, spread:0.9, spd:210, life:0.16, grav:0, drag:5 });
       SND.sfx('fire', p.level);
     }
@@ -4037,7 +4122,8 @@ class GameScene extends Scene {
       const tg = pickTargets(this, m.x, m.y, n);
       const dmg = missileDamageOf(this.stage, p.level);
       for(let i=0;i<n;i++)
-        this.pmissiles.push(new PlayerMissile(m.x, m.y, tg[i], dmg, i*0.045, (i % 2) ? 1 : -1));
+        this.pmissiles.push(Object.assign(
+          new PlayerMissile(m.x, m.y, tg[i], dmg, i*0.045, (i % 2) ? 1 : -1), { pid: p.pid }));
       Particles.spawn(m.x, m.y, 14, { ang:0, spread:2.2, spd:520, life:0.36, size:PX*2 });
       Shake.add(7, 0.15);
       SND.sfx('missile'); Input.rumble(0.35, 0.25, 120);
@@ -4047,7 +4133,7 @@ class GameScene extends Scene {
       p.shieldT = SHIELD_TIME; p.shieldHits.length = 0;   // 10초 무적 쉴드
       p.hurtT = 0;
       this.roars.push(new DragonRoar(this, p));
-      Popups.add(p.x, p.y - 100, 'SHIELD 10s', '#6ec8ff', 4);
+      Popups.add(p.x, p.y - 100, 'SHIELD ' + SHIELD_TIME + 's', '#6ec8ff', 4);
       SND.sfx('nuke'); SND.sfx('shield'); Input.rumble(1.0, 1.0, 1200);
     }
   }
@@ -4089,15 +4175,28 @@ class GameScene extends Scene {
     this.director.update(dt);
     if(this.bossBannerT > 0) this.bossBannerT -= dt;
     if(this.pickupT > 0) this.pickupT -= dt;
-    if(this.bombItemsLeft > 0){
-      this.bombItemT -= dt;
-      if(this.bombItemT <= 0){
-        this.bombItemT = BOMB_ITEM_INTERVAL; this.bombItemsLeft--;
-        // 사람 수만큼 떨어뜨리되 위아래로 벌려서 사이좋게 하나씩 먹게 한다
-        const n = this.players().length;
-        const y0 = 220 + Math.random()*180;
-        for(let i=0;i<n;i++)
-          this.items.push(new Item(GAME_W + 50, y0 + (i - (n-1)/2)*260, ITEM_KIND.BOMB));
+    // ---- 정해진 개수만큼만 투하한다 ----
+    const KIND = { missile:ITEM_KIND.MISSILE, apple:ITEM_KIND.APPLE, bomb:ITEM_KIND.BOMB };
+    for(const d of this.dropQ){
+      if(d.left <= 0) continue;
+      d.t -= dt;
+      if(d.t > 0) continue;
+      d.t = d.every; d.left--;
+      const n = this.players().length;
+      const y0 = 220 + Math.random()*180;
+      for(let i=0;i<n;i++)
+        this.items.push(new Item(GAME_W + 50, y0 + (i - (n-1)/2)*260, KIND[d.kind]));
+    }
+    // ---- 황금동전 : 점수용. 움직여서 훑어 먹으라고 곡선으로 뿌린다 ----
+    this.coinT -= dt;
+    if(this.coinT <= 0){
+      this.coinT = COIN_INTERVAL;
+      const cy = 150 + Math.random()*400, amp = 60 + Math.random()*110;
+      const ph = Math.random()*Math.PI*2, dir = Math.random() < 0.5 ? 1 : -1;
+      for(let i=0;i<COIN_PER_ARC;i++){
+        const k = i/(COIN_PER_ARC-1);
+        this.items.push(new Item(GAME_W + 40 + i*54,
+          clamp(cy + Math.sin(ph + k*2.2)*amp*dir, 90, 630), ITEM_KIND.COIN));
       }
     }
     if(this.bossDeathT > 0){
@@ -4198,7 +4297,9 @@ class GameScene extends Scene {
     this.bombs     = this.bombs.filter(o => !o.dead);
     this.waves     = this.waves.filter(o => !o.dead);
     this.booms     = this.booms.filter(o => !o.dead);
-    if(this.booms.length > 26) this.booms.splice(0, this.booms.length - 26);
+    // 폭발은 반경 118 짜리 원을 3겹으로 그린다. 20개가 겹치면 그것만으로
+    // 프레임당 0.9화면분을 칠한다. 14개를 넘으면 오래된 것부터 버린다.
+    if(this.booms.length > 14) this.booms.splice(0, this.booms.length - 14);
     this.pmissiles = this.pmissiles.filter(o => !o.dead);
     this.items     = this.items.filter(o => !o.dead);
     this.roars     = this.roars.filter(o => !o.dead);
@@ -4380,6 +4481,11 @@ class GameScene extends Scene {
   drawPlayerPanel(ctx, p, x, y0, col){
     const W = 216;
     let y = y0;
+    // 점수 (하트 위)
+    drawText(ctx, 'SCORE', x, y, 2, { color:'#8a93b8', shadow:'#0a1830' });
+    drawDigits(ctx, String(Math.min(999999, p.score|0)).padStart(6, '0'), x + 52, y - 2, 3,
+      { color: col, outline:PAL.outline });
+    y += 24;
     // 하트
     const rows = ['.XX.XX.','XXXXXXX','.XXXXX.','..XXX..','...X...'];
     for(let i=0;i<Math.min(MAX_LIVES, 8);i++){
