@@ -379,12 +379,15 @@ function buildRidge(seed, base, amp, rough, cTop, cBody, cDeep){
   for(let k=0;k<freqs.length;k++) waves.push({ f:freqs[k], a:amp*amps[k], p:rnd()*Math.PI*2 });
 
   const h = new Array(COLS);
+  let top = GAME_H;
   for(let i=0;i<COLS;i++){
     let v = 0;
     for(const w of waves) v += w.a * Math.sin(2*Math.PI*w.f*i/COLS + w.p);
     v += (hash1(i,seed) - 0.5) * rough;
     h[i] = snap(base - v);
+    if(h[i] < top) top = h[i];
   }
+  cv._top = Math.max(0, top - PX*2);      // 이 위쪽은 전부 투명 -> 블릿 생략
   for(let i=0;i<COLS;i++){
     const x = i*PX, top = h[i];
     c.fillStyle = cBody; c.fillRect(x, top, PX, GAME_H - top);
@@ -398,6 +401,13 @@ function buildRidge(seed, base, amp, rough, cTop, cBody, cDeep){
     }
   }
   return cv;
+}
+
+/* 능선 블릿 : 투명한 위쪽 영역을 잘라내 드로우 비용을 줄인다 */
+function blitRidge(ctx, img, x){
+  const t = img._top || 0, hh = GAME_H - t;
+  if(hh <= 0) return;
+  ctx.drawImage(img, 0, t, GAME_W, hh, x, t, GAME_W, hh);
 }
 
 /* 로고: 도트 텍스트를 오프스크린에 1회 렌더 (불꽃 그라데이션 + 외곽선 + 그림자) */
@@ -657,7 +667,10 @@ function spriteSize(level){
    flip=true 면 좌우 반전 (왼쪽 보는 적에게 사용) */
 function drawGrid(ctx, grid, ox, oy, cols, cell, pal, flip, tint){
   for(let r=0; r<grid.length; r++){
-    const row = grid[r], gy = oy + r*cell;
+    const row = grid[r];
+    // 소수 배율(예: 4.8)도 쓸 수 있도록 셀 경계를 정수로 반올림해서 그린다.
+    // 인접 셀이 같은 경계를 공유하므로 틈이나 겹침이 생기지 않는다.
+    const gy0 = Math.round(oy + r*cell), gh = Math.round(oy + (r+1)*cell) - gy0;
     let c = 0;
     while(c < row.length){
       const ch = row[c];
@@ -665,8 +678,9 @@ function drawGrid(ctx, grid, ox, oy, cols, cell, pal, flip, tint){
       let e = c + 1;
       while(e < row.length && row[e] === ch) e++;
       ctx.fillStyle = tint || pal[ch] || '#ff00ff';
-      const gx = flip ? ox + (cols - e)*cell : ox + c*cell;
-      ctx.fillRect(gx, gy, (e - c)*cell, cell);
+      const x0 = Math.round(ox + (flip ? (cols - e) : c) * cell);
+      const x1 = Math.round(ox + (flip ? (cols - c) : e) * cell);
+      ctx.fillRect(x0, gy0, x1 - x0, gh);
       c = e;
     }
   }
@@ -710,6 +724,8 @@ class Player {
     this.moving = false;
     this.level = level || 1;      // 불 레벨 = 성장 단계
     this.growT = 0;               // 레벨업 연출 타이머
+    this.pose = 2;
+    this.trail = [];              // 잔상용 위치 궤적
   }
   setLevel(lv){
     const n = clamp(lv, 1, MAX_LEVEL);
@@ -758,15 +774,35 @@ class Player {
     const rate = this.moving ? PLAYER.FLY_FPS : PLAYER.IDLE_FPS;
     this.animT += dt;
     while(this.animT >= rate){ this.animT -= rate; this.animI++; }
-  }
-  render(ctx){
+
+    // 현재 포즈 확정 (상승/하강 시 날갯짓을 치우치게)
     const seq = this.moving ? FLY_SEQ : IDLE_SEQ;
     let pose = seq[this.animI % seq.length];
-    // 상승/하강 시 날갯짓을 치우치게: 올라갈 땐 아래로 내려치고, 내려갈 땐 위로 든 포즈 쪽으로
-    if(this.vy < -PLAYER.SPEED*0.45) pose = Math.min(3, pose + 1);
-    else if(this.vy > PLAYER.SPEED*0.45) pose = Math.max(0, pose - 1);
+    if(this.vy < -PLAYER.SPEED*0.45)      pose = Math.min(3, pose + 1);
+    else if(this.vy > PLAYER.SPEED*0.45)  pose = Math.max(0, pose - 1);
+    this.pose = pose;
+
+    // 잔상 궤적 (최근 8프레임)
+    this.trail.push({ x:this.x, y:this.y, pose:pose });
+    if(this.trail.length > 8) this.trail.shift();
+  }
+  render(ctx){
+    const pose = this.pose;
     // 정지 시 몸체가 위아래로 살짝 (도트 단위로 스냅)
     const bob = this.moving ? 0 : snap(Math.sin(this.t * 3.2) * 3);
+
+    // --- 잔상 : 빠르게 움직일 때 뒤에 푸른 실루엣을 남겨 속도감을 준다 ---
+    const spd = Math.hypot(this.vx, this.vy);
+    if(spd > PLAYER.SPEED*0.5){
+      const k = Math.min(1, (spd/PLAYER.SPEED - 0.5) / 0.5);
+      for(let i=0; i<3; i++){
+        const g = this.trail[this.trail.length - 1 - (i+1)*2];
+        if(!g) continue;
+        ctx.globalAlpha = (0.30 - i*0.09) * k;
+        drawDragon(ctx, NOVART_PAL, this.level, g.x, g.y, g.pose, false, '#6fb8ff');
+      }
+      ctx.globalAlpha = 1;
+    }
 
     // 레벨업 직후 잠깐 흰빛 (성장 연출)
     if(this.growT > 0){
@@ -874,16 +910,16 @@ class Boom {
 const FIRE_INTERVAL = 0.08;                  // 초당 12.5발
 /* 레벨별 : n=갈래수 th=두께 dmg=데미지 spd=속도 pierce=관통수 len=길이 spread=확산(px/s) */
 const FIRE = [ null,
-  { n:1, th: 8, dmg:10, spd:1050, pierce:0,  len: 56, spread: 0  },  // Lv1  얇은 불줄기
-  { n:1, th:10, dmg:12, spd:1050, pierce:0,  len: 62, spread: 0  },  // Lv2
-  { n:2, th:12, dmg:12, spd:1080, pierce:0,  len: 66, spread:34  },  // Lv3  2줄로 갈라짐
-  { n:2, th:14, dmg:14, spd:1080, pierce:0,  len: 72, spread:40  },  // Lv4
-  { n:3, th:18, dmg:18, spd:1100, pierce:1,  len: 82, spread:58  },  // Lv5  굵은 1줄 + 확산
-  { n:3, th:21, dmg:21, spd:1100, pierce:1,  len: 90, spread:64  },  // Lv6
-  { n:1, th:26, dmg:68, spd:1150, pierce:3,  len:104, spread: 0  },  // Lv7  화염 기둥 (관통)
-  { n:1, th:32, dmg:74, spd:1150, pierce:4,  len:118, spread: 0  },  // Lv8
-  { n:1, th:40, dmg:92, spd:1200, pierce:6,  len:136, spread: 0  },  // Lv9
-  { n:1, th:56, dmg:120,spd:1250, pierce:99, len:172, spread: 0  }   // Lv10 거대 화염포
+  { n:1, th:16, dmg: 18, spd:1080, pierce:0,  len: 80, spread: 0  },  // Lv1  기본부터 두툼한 불줄기
+  { n:1, th:19, dmg: 22, spd:1080, pierce:0,  len: 86, spread: 0  },  // Lv2
+  { n:2, th:22, dmg: 20, spd:1100, pierce:0,  len: 92, spread:36  },  // Lv3  2줄로 갈라짐
+  { n:2, th:25, dmg: 24, spd:1100, pierce:0,  len: 98, spread:42  },  // Lv4
+  { n:3, th:30, dmg: 30, spd:1120, pierce:1,  len:106, spread:60  },  // Lv5  굵은 1줄 + 확산
+  { n:3, th:34, dmg: 34, spd:1120, pierce:1,  len:114, spread:66  },  // Lv6
+  { n:1, th:42, dmg:110, spd:1180, pierce:3,  len:132, spread: 0  },  // Lv7  화염 기둥 (관통)
+  { n:1, th:50, dmg:128, spd:1180, pierce:4,  len:148, spread: 0  },  // Lv8
+  { n:1, th:60, dmg:150, spd:1220, pierce:6,  len:168, spread: 0  },  // Lv9
+  { n:1, th:78, dmg:190, spd:1280, pierce:99, len:210, spread: 0  }   // Lv10 거대 화염포
 ];
 
 class FireBolt {
@@ -927,7 +963,7 @@ const ZOMBIE_PAL = {
   k:'#0a1408', z:'#6f9c4a', Z:'#3f5c28', R:'#ff3a2a',
   c:'#8a7550', C:'#54452c', b:'#e8e0c8', w:'#55703a', W:'#33471f'
 };
-const Z_COLS = 20, Z_ROWS = 20, Z_CELL = 4;
+const Z_COLS = 20, Z_ROWS = 20, Z_CELL = 4.8;      // 기존 4 에서 +20%
 const Z_BODY = [
   '....................','....................','....................','...kkkkk............',
   '..kzzzzzk...........','..kRzzRzk...........','..kzzzzzk...........','..kzZZZzk...........',
@@ -982,7 +1018,7 @@ class Arrow {
 class WingZombie {
   constructor(x, y, speed){
     this.x = x; this.y = y;
-    this.hp = 10; this.maxHp = 10;
+    this.hp = 18; this.maxHp = 18;      // 불 1발
     this.vx = -(speed || 175); this.vy = 0;
     this.t = Math.random()*6;
     this.baseY = y;
@@ -991,7 +1027,7 @@ class WingZombie {
     this.shootT = 0.8 + Math.random()*1.4;
     this.dead = false; this.score = 100;
   }
-  get box(){ return { x:this.x - 26, y:this.y - 30, w:52, h:60 }; }
+  get box(){ return { x:this.x - 31, y:this.y - 36, w:62, h:72 }; }
   update(dt, scene){
     this.t += dt;
     if(this.flash > 0) this.flash -= dt;
@@ -1256,14 +1292,14 @@ class EnemyBase {
 }
 
 /* ---------------- 적2 : 드래곤 라이더 좀비 ---------------- */
-const DR_CELL = 3;                                   // FORM A x3 = 90 x 84
+const DR_CELL = 3.6;                                 // FORM A x3.6 = 108 x 101 (+20%)
 class DragonRider extends EnemyBase {
   constructor(x, y){
-    super(x, y, 30, 300);
+    super(x, y, 54, 300);        // 불 3발
     this.vx = -(150 + Math.random()*50);
     this.shootT = 1.0 + Math.random()*1.4;
   }
-  get box(){ return { x:this.x - 32, y:this.y - 28, w:64, h:56 }; }
+  get box(){ return { x:this.x - 38, y:this.y - 34, w:77, h:67 }; }
   update(dt, scene){
     this.t += dt;
     if(this.flash > 0) this.flash -= dt;
@@ -1296,15 +1332,15 @@ class DragonRider extends EnemyBase {
 }
 
 /* ---------------- 적3 : 헤비 드래곤 라이더 ---------------- */
-const HV_CELL = 4;                                   // FORM A x4 = 120 x 112
+const HV_CELL = 4.8;                                 // FORM A x4.8 = 144 x 134 (+20%)
 class HeavyRider extends EnemyBase {
   constructor(x, y){
-    super(x, y, 80, 800);
+    super(x, y, 144, 800);       // 불 8발
     this.vx = -(95 + Math.random()*35);
     this.missileT = 1.6 + Math.random()*1.0;
     this.bombT    = 2.6 + Math.random()*1.2;
   }
-  get box(){ return { x:this.x - 44, y:this.y - 36, w:88, h:72 }; }
+  get box(){ return { x:this.x - 53, y:this.y - 43, w:106, h:86 }; }
   update(dt, scene){
     this.t += dt;
     if(this.flash > 0) this.flash -= dt;
@@ -1345,17 +1381,17 @@ class HeavyRider extends EnemyBase {
 }
 
 /* ---------------- 중간보스 : 드래곤 나이트 ---------------- */
-const MB_CELL = 6;                                   // FORM B x6 = 216 x 192
+const MB_CELL = 7.2;                                 // FORM B x7.2 = 259 x 230 (+20%)
 class MidBoss extends EnemyBase {
   constructor(stage){
-    super(GAME_W + 180, GAME_H/2, 1400 + (stage-1)*420, 5000);
+    super(GAME_W + 180, GAME_H/2, midBossHpOf(stage), 5000);
     this.isBoss = true; this.name = 'DRAGON KNIGHT';
     this.phase = 'enter'; this.pt = 0; this.pi = 0;
     this.homeX = GAME_W - 230; this.homeY = GAME_H/2;
     this.enraged = false;
     this.breathN = 0; this.breathT = 0;
   }
-  get box(){ return { x:this.x - 82, y:this.y - 70, w:164, h:140 }; }
+  get box(){ return { x:this.x - 98, y:this.y - 84, w:197, h:168 }; }
   get rate(){ return this.enraged ? 1.5 : 1; }
   update(dt, scene){
     this.t += dt;
@@ -1433,17 +1469,17 @@ class MidBoss extends EnemyBase {
 }
 
 /* ---------------- 최종보스 : 좀비 드래곤 로드 ---------------- */
-const BOSS_CELL = 9;                                 // FORM B x9 = 324 x 288 (화면 1/4)
+const BOSS_CELL = 10.8;                              // FORM B x10.8 = 389 x 346 (+20%)
 class Boss extends EnemyBase {
   constructor(stage){
-    super(GAME_W + 280, GAME_H/2, 2000 + (stage-1)*620, 12000);
+    super(GAME_W + 280, GAME_H/2, bossHpOf(stage), 12000);
     this.isBoss = true; this.name = 'ZOMBIE DRAGON LORD';
     this.phase = 'enter'; this.pt = 0; this.pi = 0;
     this.homeX = GAME_W - 250; this.homeY = GAME_H/2;
     this.enraged = false;
     this.swirlN = 0; this.swirlT = 0; this.swirlA = 0;
   }
-  get box(){ return { x:this.x - 120, y:this.y - 104, w:240, h:208 }; }
+  get box(){ return { x:this.x - 144, y:this.y - 125, w:288, h:250 }; }
   get rate(){ return this.enraged ? 1.35 : 1; }
   update(dt, scene){
     this.t += dt;
@@ -1619,8 +1655,8 @@ class Director {
    ================================================================== */
 
 /* 미사일 데미지는 "중간보스 HP의 25%" 로 정의 (스펙 3.3) */
-function midBossHpOf(stage){ return 1400 + (stage-1)*420; }
-function bossHpOf(stage){    return 2000 + (stage-1)*620; }
+function midBossHpOf(stage){ return 2200 + (stage-1)*620; }
+function bossHpOf(stage){    return 3200 + (stage-1)*900; }
 function missileDamageOf(stage){ return midBossHpOf(stage) * 0.25; }
 
 const MISSILE = {
@@ -2084,8 +2120,8 @@ class TitleScene extends Scene {
 
     // ---- 산 (패럴랙스 2레이어) ----
     const fx = -snap(this.offFar), nx = -snap(this.offNear);
-    ctx.drawImage(this.far,  fx, 0);  ctx.drawImage(this.far,  fx + GAME_W, 0);
-    ctx.drawImage(this.near, nx, 0);  ctx.drawImage(this.near, nx + GAME_W, 0);
+    blitRidge(ctx, this.far,  fx); blitRidge(ctx, this.far,  fx + GAME_W);
+    blitRidge(ctx, this.near, nx); blitRidge(ctx, this.near, nx + GAME_W);
 
     // ---- 불씨 ----
     for(const e of this.embers){
@@ -2161,9 +2197,14 @@ class GameScene extends Scene {
   enter(){
     this.t = 0; this.stage = 1;
     this.sky  = buildSky(SKY_TEST);
+    // 4층 패럴랙스 (원경 -> 전경). 전경은 플레이어보다 앞에 그려 스쳐 지나가게 한다
     this.far  = buildRidge(2024, 596, 132, 24, '#7d9ec4', '#4d6a99', '#3a5178');
-    this.near = buildRidge(7788, 706,  86, 42, '#3f6b52', '#1e3b31', '#12251e');
-    this.offFar = 0; this.offNear = 0;
+    this.mid  = buildRidge(5150, 664, 104, 32, '#5d8a76', '#2c5344', '#1b3830');
+    this.near = buildRidge(7788, 730,  74, 46, '#3f6b52', '#1e3b31', '#12251e');
+    this.fg   = buildRidge(3311, 792,  66, 58, '#2b4436', '#0f1d18', '#070f0c');
+    this.offFar = 0; this.offMid = 0; this.offNear = 0; this.offFg = 0;
+    this.scrollK = 1;      // 플레이어 이동에 반응하는 스크롤 배율
+    this.camLead = 0;      // 진행 방향으로 월드를 미는 카메라 리드
 
     this.player = new Player(320, GAME_H/2);
     this.stick  = new VirtualStick(STICK_CFG);
@@ -2202,8 +2243,13 @@ class GameScene extends Scene {
       this.clouds.push({ x: rnd()*GAME_W, y: snap(40 + rnd()*380),
         w: snap(90 + rnd()*210), h: snap(12 + rnd()*16), sp: 34 + rnd()*58, a: 0.16 + rnd()*0.22 });
     this.lines = [];
-    for(let i=0;i<34;i++)
-      this.lines.push({ x: rnd()*GAME_W, y: snap(rnd()*GAME_H), len: snap(24+rnd()*52), sp: 620+rnd()*520 });
+    for(let i=0;i<70;i++)
+      this.lines.push({ x: rnd()*GAME_W, y: snap(rnd()*GAME_H), len: snap(40+rnd()*110), sp: 900+rnd()*900 });
+    // 전경 구름 (플레이어 앞을 아주 빠르게 스쳐 지나감)
+    this.fgWisps = [];
+    for(let i=0;i<7;i++)
+      this.fgWisps.push({ x: rnd()*GAME_W*1.6, y: snap(30 + rnd()*640),
+        w: snap(160 + rnd()*280), h: snap(10 + rnd()*20), sp: 1100 + rnd()*700, a: 0.10 + rnd()*0.12 });
   }
   exit(){ Input.pointerHandler = null; }
 
@@ -2425,16 +2471,26 @@ class GameScene extends Scene {
     this.items     = this.items.filter(o => !o.dead);
     this.roars     = this.roars.filter(o => !o.dead);
 
-    // ---- 배경 ----
-    this.offFar  = (this.offFar  +  55*dt) % GAME_W;
-    this.offNear = (this.offNear + 150*dt) % GAME_W;
+    // ---- 배경 : 플레이어가 앞으로 밀수록 세상이 빨라진다 ----
+    const drive = clamp(p.vx / PLAYER.SPEED, -1, 1);
+    this.scrollK += (1 + drive*0.7 - this.scrollK) * Math.min(1, 4*dt);   // 0.3 ~ 1.7배
+    this.camLead += (drive*30 - this.camLead) * Math.min(1, 5*dt);
+    const K = this.scrollK;
+    this.offFar  = (this.offFar  +  120*K*dt) % GAME_W;
+    this.offMid  = (this.offMid  +  330*K*dt) % GAME_W;
+    this.offNear = (this.offNear +  700*K*dt) % GAME_W;
+    this.offFg   = (this.offFg   + 1350*K*dt) % GAME_W;
     for(const cl of this.clouds){
-      cl.x -= cl.sp*dt;
+      cl.x -= cl.sp*K*dt;
       if(cl.x + cl.w < -20){ cl.x = GAME_W + Math.random()*260; cl.y = snap(40 + Math.random()*380); }
     }
     for(const l of this.lines){
-      l.x -= l.sp*dt;
+      l.x -= l.sp*K*dt;
       if(l.x + l.len < -20){ l.x = GAME_W + Math.random()*300; l.y = snap(Math.random()*GAME_H); }
+    }
+    for(const w of this.fgWisps){
+      w.x -= w.sp*K*dt;
+      if(w.x + w.w < -40){ w.x = GAME_W + Math.random()*500; w.y = snap(30 + Math.random()*640); }
     }
 
     if(Input.pressed('lvup'))   p.setLevel(p.level + 1);
@@ -2468,11 +2524,19 @@ class GameScene extends Scene {
       ctx.fillRect(x - PX*2, cl.y + cl.h, snap(cl.w*0.7), PX*2);
     }
     ctx.globalAlpha = 1;
-    const fx = -snap(this.offFar), nx = -snap(this.offNear);
-    ctx.drawImage(this.far,  fx, 0);  ctx.drawImage(this.far,  fx + GAME_W, 0);
-    ctx.drawImage(this.near, nx, 0);  ctx.drawImage(this.near, nx + GAME_W, 0);
-    ctx.globalAlpha = 0.22; ctx.fillStyle = '#eaffff';
-    for(const l of this.lines) ctx.fillRect(snap(l.x), l.y, l.len, PX);
+    // 4층 패럴랙스 + 카메라 리드 (가까운 층일수록 리드를 크게 받아 원근이 강조됨)
+    const lead = this.camLead;
+    const draw2 = (img, off, k) => {
+      const x = -snap(((off + lead*k) % GAME_W + GAME_W) % GAME_W);
+      blitRidge(ctx, img, x); blitRidge(ctx, img, x + GAME_W);
+    };
+    draw2(this.far,  this.offFar,  0.25);
+    draw2(this.mid,  this.offMid,  0.55);
+    draw2(this.near, this.offNear, 1.0);
+    // 속도선 : 스크롤이 빠를수록 진하고 길어짐
+    const sk = clamp((this.scrollK - 0.6) / 1.1, 0, 1);
+    ctx.globalAlpha = 0.14 + sk*0.30; ctx.fillStyle = '#eaffff';
+    for(const l of this.lines) ctx.fillRect(snap(l.x), l.y, snap(l.len*(0.6 + sk*0.9)), PX);
     ctx.globalAlpha = 1;
 
     ctx.save();
@@ -2495,6 +2559,17 @@ class GameScene extends Scene {
     for(const w of this.waves) w.render(ctx);
     for(const b of this.booms) b.render(ctx);
     ctx.restore();
+
+    // ---- 전경 (플레이어보다 앞. 가장 빠르게 스쳐 지나가 속도감을 만든다) ----
+    const fgx = -snap(((this.offFg + this.camLead*1.6) % GAME_W + GAME_W) % GAME_W);
+    blitRidge(ctx, this.fg, fgx); blitRidge(ctx, this.fg, fgx + GAME_W);
+    for(const w of this.fgWisps){
+      ctx.globalAlpha = w.a; ctx.fillStyle = '#ffffff';
+      const x = snap(w.x);
+      ctx.fillRect(x, w.y, w.w, w.h);
+      ctx.fillRect(x + snap(w.w*0.25), w.y - PX, snap(w.w*0.45), PX);
+    }
+    ctx.globalAlpha = 1;
 
     for(const r of this.roars) r.render(ctx);      // 필살기 연출은 화면 전체 고정
 
