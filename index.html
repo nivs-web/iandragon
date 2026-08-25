@@ -1888,11 +1888,50 @@ class Item {
 }
 
 /* ==================================================================
-   화면 버튼 (우하단 미사일 / 필살기)
+   화면 버튼 (우하단 미사일 / 필살기) - 도트 아이콘
    ================================================================== */
+const ICON_PAL = {
+  K:'#0d0912',  // 외곽선
+  w:'#e8ecf6',  // 동체 밝은 면
+  s:'#8b93a8',  // 동체 그늘
+  r:'#ff4d5a',  // 탄두
+  F:'#ffd24a',  // 화염 밝음
+  f:'#ff7a1e',  // 화염
+  o:'#c81f2e',  // 화염 그늘
+  L:'#fffbe0'   // 번개
+};
+/* 미사일 아이콘 (15 x 9) : 좌측 분사 화염 + 동체 + 우측 탄두 */
+const ICON_MISSILE = [
+  '..K............',
+  '..KK...........',
+  'fFKKKKKKKKKK...',
+  'FfKwwwwwwwwwKK.',
+  'FfKwwwwwwwwwwrK',
+  'FfKssssssssssKK',
+  'fFKKKKKKKKKK...',
+  '..KK...........',
+  '..K............'
+];
+/* 필살기(드래곤 뢰) 아이콘 (12 x 12) : 화염 구슬 안의 번개 */
+const ICON_BOMB = [
+  '....KKKK....',
+  '..KKffffKK..',
+  '.KffFFLLFfK.',
+  'KffFFFLLFFfK',
+  'KfFFFFLLFFfK',
+  'KfFFLLLLLFfK',
+  'KfFFFLLLFFfK',
+  'KfFFFLLFFFfK',
+  'KffFFLLFFFfK',
+  '.KffFLFFFfK.',
+  '..KKooooKK..',
+  '....KKKK....'
+];
 class TouchButton {
-  constructor(x, y, r, label, color){
-    this.x = x; this.y = y; this.r = r; this.label = label; this.color = color;
+  constructor(x, y, r, icon, cell, color){
+    this.x = x; this.y = y; this.r = r; this.color = color;
+    this.icon = icon; this.cols = icon[0].length; this.cell = cell;
+    this.iw = this.cols * cell; this.ih = icon.length * cell;
     this.pid = null; this.just = false; this.flash = 0;
   }
   down(id, px, py){
@@ -1904,15 +1943,18 @@ class TouchButton {
   consume(){ const j = this.just; this.just = false; return j; }
   update(dt){ if(this.flash > 0) this.flash -= dt; }
   render(ctx, count){
-    const pressed = this.pid !== null;
-    ctx.globalAlpha = count > 0 ? (pressed ? 0.85 : 0.55) : 0.22;
-    fillPixelCircle(ctx, this.x, this.y, this.r, pressed ? this.color : '#1b2436');
+    const pressed = this.pid !== null, usable = count > 0;
+    ctx.globalAlpha = usable ? (pressed ? 0.8 : 0.5) : 0.2;
+    fillPixelCircle(ctx, this.x, this.y, this.r, pressed ? this.color : '#141c2c');
     drawPixelRing(ctx, this.x, this.y, this.r, PX, this.color);
     ctx.globalAlpha = 1;
-    drawText(ctx, this.label, this.x, this.y - 16, 3,
-      { align:'center', color: count > 0 ? PAL.white : '#5a6478', shadow:'#000' });
-    drawText(ctx, 'x' + count, this.x, this.y + 6, 4,
-      { align:'center', color: count > 0 ? this.color : '#5a6478', outline:PAL.outline });
+    // 사용 가능할 때만 원색, 아니면 회색 톤으로 통일
+    ctx.globalAlpha = usable ? 1 : 0.35;
+    drawGrid(ctx, this.icon, snap(this.x - this.iw/2), snap(this.y - this.ih/2 - 10),
+      this.cols, this.cell, ICON_PAL, false, usable ? null : '#5a6478');
+    ctx.globalAlpha = 1;
+    drawText(ctx, 'x' + count, this.x, this.y + this.ih/2 - 2, 4,
+      { align:'center', color: usable ? this.color : '#5a6478', outline:PAL.outline, shadow:'#000' });
   }
 }
 
@@ -2192,6 +2234,8 @@ const SKY_TEST = [
 ];
 const MAX_LIVES = 10;
 const BOMB_ITEM_INTERVAL = 20;      // 20초마다 필살기 구슬 등장
+const STAGE_TIME = 90;              // 스테이지 제한 시간 (초)
+const TIME_BAR = { x: 400, y: 16, w: 480, h: 26 };   // 상단 중앙 시간 게이지 (터치 시 일시정지)
 
 class GameScene extends Scene {
   enter(){
@@ -2208,10 +2252,17 @@ class GameScene extends Scene {
 
     this.player = new Player(320, GAME_H/2);
     this.stick  = new VirtualStick(STICK_CFG);
-    this.btnMsl  = new TouchButton(1090, 612, 54, 'MSL',  '#8fd0ff');
-    this.btnBomb = new TouchButton(1208, 520, 54, 'BOMB', PAL.gold);
+    this.btnMsl  = new TouchButton(1090, 612, 56, ICON_MISSILE, 4, '#8fd0ff');
+    this.btnBomb = new TouchButton(1208, 516, 56, ICON_BOMB,    4, PAL.gold);
     Input.pointerHandler = {
       down:(id,x,y) => {
+        // 상단 시간 게이지를 누르면 일시정지 (스펙 6.1)
+        if(this.state === 'play' &&
+           x >= TIME_BAR.x - 10 && x <= TIME_BAR.x + TIME_BAR.w + 10 &&
+           y >= TIME_BAR.y - 10 && y <= TIME_BAR.y + TIME_BAR.h + 10){
+          this.setPause(true); return;
+        }
+        if(this.state !== 'play'){ this.uiTap = true; return; }
         if(this.btnMsl.down(id,x,y)) return;
         if(this.btnBomb.down(id,x,y)) return;
         this.stick.down(id,x,y);
@@ -2233,6 +2284,15 @@ class GameScene extends Scene {
     this.killStreak = 0; this.bombItemT = BOMB_ITEM_INTERVAL; this.bombItemsLeft = 2;
     this.hp = 100; this.lives = 5;
     this.pickupMsg = null; this.pickupT = 0;
+
+    // 게임 루프 상태
+    this.state = 'play';          // play | pause | clear | over
+    this.stateT = 0;
+    this.timeLeft = STAGE_TIME;
+    this.endReason = '';
+    this.bonus = 0;
+    this.finalBossKilled = false;
+    this.menuIdx = 0;
 
     this.director = new Director(this, this.stage);
     Particles.clear();
@@ -2261,6 +2321,7 @@ class GameScene extends Scene {
     this.director.onBossKilled(b);
     if(this.boss === b) this.boss = null;
     const big = !(b instanceof MidBoss);
+    if(big) this.finalBossKilled = true;          // 최종보스 격파 -> 폭발 연출 후 클리어
     this.bossDeathT = big ? 3.0 : 2.0;
     this.bossDeathX = b.x; this.bossDeathY = b.y; this.bossDeathR = big ? 150 : 100;
     Shake.add(big ? 16 : 11, big ? 1.0 : 0.6);
@@ -2302,9 +2363,64 @@ class GameScene extends Scene {
       pal:['#ffffff','#ffe14a','#ffa32e','#ff7a1e'] });
   }
 
+  setPause(on){
+    if(on && this.state === 'play'){ this.state = 'pause'; this.stateT = 0; this.menuIdx = 0; this.stick.up(this.stick.pid); }
+    else if(!on && this.state === 'pause'){ this.state = 'play'; this.stateT = 0; }
+  }
+  finish(kind, reason){
+    if(this.state === 'clear' || this.state === 'over') return;
+    this.state = kind; this.stateT = 0; this.endReason = reason || '';
+    this.stick.up(this.stick.pid);
+    if(kind === 'clear'){
+      this.bonus = Math.round(this.timeLeft) * 100 + this.lives * 500;
+      this.score += this.bonus;
+      this.lives = Math.min(MAX_LIVES, this.lives + 1);      // 클리어 보상 하트 +1
+    }
+  }
+  /* 일시정지 / 종료 화면에서는 게임 로직을 완전히 멈추고 연출만 갱신 */
+  updatePaused(dt){
+    this.stateT += dt;
+    const tap = this.uiTap; this.uiTap = false;
+    if(Input.pressed('up'))   this.menuIdx = (this.menuIdx + 1) % 2;
+    if(Input.pressed('down')) this.menuIdx = (this.menuIdx + 1) % 2;
+    if(Input.pressed('pause')){ this.setPause(false); return; }
+    if(Input.pressed('confirm') || tap){
+      if(this.menuIdx === 0) this.setPause(false);
+      else this.mgr.change(new TitleScene());
+    }
+  }
+  updateEnd(dt){
+    this.stateT += dt;
+    // 폭발/파티클 잔여 연출만 계속 재생
+    for(const b of this.booms) b.update(dt);
+    Particles.update(dt); Shake.update(dt);
+    this.booms = this.booms.filter(o => !o.dead);
+    if(this.bossDeathT > 0){
+      this.bossDeathT -= dt;
+      if(Math.random() < 0.5){
+        this.booms.push(new Boom(this.bossDeathX + (Math.random()-0.5)*240,
+                                 this.bossDeathY + (Math.random()-0.5)*200, 30 + Math.random()*46, 0.4));
+        Shake.add(6, 0.12);
+      }
+    }
+    const tap = this.uiTap; this.uiTap = false;
+    if(this.stateT > 1.0 && (Input.pressed('confirm') || Input.pressed('pause') || tap))
+      this.mgr.change(new TitleScene());
+  }
+
   update(dt){
+    if(this.state === 'pause'){ this.updatePaused(dt); return; }   // 게임 로직 완전 정지
+    if(this.state !== 'play'){ this.updateEnd(dt); return; }
+
     this.t += dt;
     const p = this.player;
+
+    // ---- 제한 시간 ----
+    this.timeLeft -= dt;
+    if(this.timeLeft <= 0){ this.timeLeft = 0; this.finish('over', 'TIME UP'); return; }
+
+    // ---- 최종보스 격파 후 폭발이 끝나면 스테이지 클리어 ----
+    if(this.finalBossKilled && this.bossDeathT <= 0){ this.finish('clear'); return; }
 
     // ---- 이동 ----
     const sv = this.stick.vector();
@@ -2495,7 +2611,8 @@ class GameScene extends Scene {
 
     if(Input.pressed('lvup'))   p.setLevel(p.level + 1);
     if(Input.pressed('lvdown')) p.setLevel(p.level - 1);
-    if(!this.mgr.busy && (Input.pressed('pause') || Input.pressed('back'))) this.mgr.change(new TitleScene());
+    if(!this.mgr.busy && Input.pressed('pause')) this.setPause(true);
+    if(!this.mgr.busy && Input.pressed('back'))  this.mgr.change(new TitleScene());
   }
 
   hurtPlayer(){
@@ -2503,13 +2620,15 @@ class GameScene extends Scene {
     Shake.add(10, 0.25);
     const p = this.player;
     this.hp -= 25;
-    if(this.hp <= 0){                       // 잔기 소모 (게임오버 처리는 Phase 6)
-      this.hp = 100;
+    if(this.hp <= 0){
       this.lives = Math.max(0, this.lives - 1);
       p.setLevel(p.level - 1);              // 죽으면 불 레벨 -1
       this.hurtT = 1.8;
       Shake.add(14, 0.5);
       this.booms.push(new Boom(p.x, p.y, 120, 0.6));
+      Particles.spawn(p.x, p.y, 34, { spd:460, life:0.8 });
+      if(this.lives <= 0){ this.hp = 0; this.finish('over', 'GAME OVER'); return; }
+      this.hp = 100;
     }
     Particles.spawn(p.x, p.y, 18, { spd:340, life:0.5, pal:['#fff','#ff9a5a','#ff4d5a','#8f1230'] });
   }
@@ -2640,8 +2759,80 @@ class GameScene extends Scene {
       drawText(ctx, 'WARNING', 640, 300, 10,
         { align:'center', color:(r)=>PAL.fire[r], outline:PAL.outline, shadow:'#000', shadowOff:10 });
     }
-    drawText(ctx, 'Q: MISSILE   E: BOMB   [ ]: LEVEL   ESC: TITLE', 640, 700, 2,
+    // ---- 상단 중앙 90초 카운트다운 게이지 (누르면 일시정지) ----
+    const B = TIME_BAR, tk = clamp(this.timeLeft / STAGE_TIME, 0, 1);
+    ctx.fillStyle = '#0a0a14'; ctx.fillRect(B.x - PX, B.y - PX, B.w + PX*2, B.h + PX*2);
+    ctx.fillStyle = '#1d2536'; ctx.fillRect(B.x, B.y, B.w, B.h);
+    // 남을수록 노랑, 줄수록 빨강
+    const seg = 16, sw = B.w / seg;
+    for(let i=0;i<seg;i++){
+      if(i / seg >= tk) break;
+      const f = i / (seg - 1);
+      ctx.fillStyle = rampColor([{p:0,c:'#ff2b2b'},{p:0.5,c:'#ff9a2e'},{p:1,c:'#ffe14a'}], f);
+      ctx.fillRect(snap(B.x + i*sw), B.y, Math.ceil(sw), B.h);
+    }
+    ctx.fillStyle = 'rgba(255,255,255,.28)'; ctx.fillRect(B.x, B.y, snap(B.w*tk), 5);
+    const secs = Math.ceil(this.timeLeft);
+    const urgent = secs <= 10 && Math.floor(this.t*5) % 2 === 0;
+    drawText(ctx, String(secs).padStart(2,'0'), B.x + B.w/2, B.y + 5, 3,
+      { align:'center', color: urgent ? '#ffffff' : PAL.outline, outline: urgent ? '#c81f2e' : null });
+
+    drawText(ctx, 'Q: MISSILE   E: BOMB   [ ]: LEVEL   ESC: PAUSE', 640, 700, 2,
       { align:'center', color:'#cfe6ff', shadow:'#0a1830' });
+
+    if(this.state === 'pause') this.renderPause(ctx);
+    else if(this.state !== 'play') this.renderEnd(ctx);
+  }
+
+  renderPause(ctx){
+    ctx.globalAlpha = 0.72; ctx.fillStyle = '#0a0616'; ctx.fillRect(0,0,GAME_W,GAME_H);
+    ctx.globalAlpha = 1;
+    drawText(ctx, 'PAUSED', 640, 208, 11,
+      { align:'center', color:(r)=>PAL.fire[r], outline:PAL.outline, shadow:'#000', shadowOff:10 });
+    const items = ['RESUME', 'QUIT TO TITLE'];
+    for(let i=0;i<items.length;i++){
+      const on = i === this.menuIdx;
+      const y = 380 + i*66;
+      if(on){
+        drawText(ctx, '>', 400, y, 5, { color:PAL.gold, outline:PAL.outline });
+        drawText(ctx, '<', 880, y, 5, { align:'right', color:PAL.gold, outline:PAL.outline });
+      }
+      drawText(ctx, items[i], 640, y, 5,
+        { align:'center', color: on ? PAL.gold : '#6b7a99', outline:PAL.outline, shadow:'#000' });
+    }
+    drawText(ctx, 'UP-DOWN: SELECT    ENTER: OK    ESC: RESUME', 640, 540, 2,
+      { align:'center', color:'#8a7bb8' });
+  }
+
+  renderEnd(ctx){
+    const clear = this.state === 'clear';
+    ctx.globalAlpha = Math.min(0.78, this.stateT * 1.6);
+    ctx.fillStyle = clear ? '#0d1a10' : '#160a0e'; ctx.fillRect(0,0,GAME_W,GAME_H);
+    ctx.globalAlpha = 1;
+    if(this.stateT < 0.35) return;
+
+    const title = clear ? 'STAGE CLEAR' : (this.endReason || 'GAME OVER');
+    drawText(ctx, title, 640, 170, 11,
+      { align:'center', color: clear ? ((r)=>PAL.fire[r]) : '#c81f2e',
+        outline:PAL.outline, shadow:'#000', shadowOff:10 });
+
+    if(this.stateT > 0.6){
+      const rows = clear
+        ? [['SCORE', String(this.score)], ['TIME BONUS', '+' + this.bonus],
+           ['KILLS', String(this.kills)], ['FIRE LV', String(this.player.level)],
+           ['LIFE', String(this.lives) + '  (+1)']]
+        : [['SCORE', String(this.score)], ['KILLS', String(this.kills)],
+           ['FIRE LV', String(this.player.level)], ['TIME LEFT', Math.ceil(this.timeLeft) + 'S']];
+      for(let i=0;i<rows.length;i++){
+        const y = 320 + i*46;
+        if(this.stateT < 0.6 + i*0.12) break;
+        drawText(ctx, rows[i][0], 430, y, 4, { color:'#8a9bbf', outline:PAL.outline });
+        drawText(ctx, rows[i][1], 860, y, 4, { align:'right', color:PAL.white, outline:PAL.outline });
+      }
+    }
+    if(this.stateT > 1.3 && Math.floor(this.stateT*1.6) % 2 === 0)
+      drawText(ctx, 'PRESS ENTER', 640, 626, 5,
+        { align:'center', color:PAL.gold, outline:PAL.outline, shadow:'#000' });
   }
 
   renderDebug(ctx){
