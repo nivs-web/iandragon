@@ -81,7 +81,7 @@ origin/main ──► feat/iandragon-game (겜부장)  ── 0단계 커밋 ─
 
 - 겜팀장은 겜부장의 **0단계 커밋 뒤에** 그 커밋에서 자기 가지를 딴다 :
   `git -C oraksil/find_shoes worktree add -b feat/iandragon-game-art ../fs-idg-art feat/iandragon-game`
-  (`node_modules` 는 `find_shoes/node_modules` 를 연결해 쓴다 — 새로 설치하지 않는다)
+  (`node_modules` 는 겜부장 작업 폴더의 `fs-idg/node_modules` 를 연결해 쓴다 — pixi.js 가 들어 있다. `find_shoes/node_modules` 는 다른 작업 중이라 쓰지 않는다)
 - 두 워크트리는 같은 저장소라 **푸시 없이** 서로의 가지를 본다.
 - **합치기는 겜부장이** 한다 : `git merge feat/iandragon-game-art` (합칠 때마다 메시지로 알림).
 - 겜팀장은 그림을 게임 화면에서 보고 싶을 때 `git merge feat/iandragon-game` 으로 최신 코드를 받아 온다.

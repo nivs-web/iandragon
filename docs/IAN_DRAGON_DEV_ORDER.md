@@ -39,7 +39,7 @@
 ### 1.3 어디서 일하나
 
 - 게임 코드 : 오락실 저장소의 **`src/games/iandragon_game/`** (기획서 15.2). 이름은 `iandragon` 저장소(드래곤 스트라이커 · 기획 문서)와 헷갈리지 않게 `iandragon_game`.
-- 워크트리 · 가지 : 겜부장 `oraksil/fs-idg` · `feat/iandragon-game` / 겜팀장 `oraksil/fs-idg-art` · `feat/iandragon-game-art` (팀 계획서 3장). `node_modules` 는 `find_shoes/node_modules` 연결.
+- 워크트리 · 가지 : 겜부장 `oraksil/fs-idg` · `feat/iandragon-game` / 겜팀장 `oraksil/fs-idg-art` · `feat/iandragon-game-art` (팀 계획서 3장). `node_modules` 는 `fs-idg/node_modules` 연결 (pixi.js 포함).
 - **`oraksil/find_shoes` 원래 작업 폴더는 건드리지 않는다** (다른 작업 중 · 남의 수정 파일 있음).
 - 기획 문서 원본은 `iandragon` 저장소 `docs/`. `iandragon` 저장소 루트 `index.html` (드래곤 스트라이커)은 **절대 건드리지 않는다.**
 - main 에 올리는 것(= 실제 배포)은 **대표님이 시킬 때만**, 겜부장이.
