@@ -1,7 +1,7 @@
 {
  "cap": 60,
  "approved": "2026-11-11 대표님 «10달러 이내로 에셋을 만들어봐» (시험판: 꼬물이 · 어슬렁 좀비 · 드래곤 성) / 2026-11-11 대표님 «총 60달러 이내에서 계속 진행, 더 필요하면 꼭 물어보고» → 한도 $60",
- "spent": 4.769,
+ "spent": 5.5873,
  "items": [
   {
    "at": "2026-11-10T14:26:53.350Z",
@@ -803,6 +803,150 @@
     "castle_w05_067.png"
    ],
    "tokens": 2449
+  },
+  {
+   "at": "2026-11-10T16:51:58.765Z",
+   "job": "sapjil",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "sapjil_068.png"
+   ],
+   "tokens": 2538
+  },
+  {
+   "at": "2026-11-10T16:52:31.127Z",
+   "job": "pokjuk",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "pokjuk_069.png"
+   ],
+   "tokens": 2546
+  },
+  {
+   "at": "2026-11-10T16:53:00.915Z",
+   "job": "sommung",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "sommung_070.png"
+   ],
+   "tokens": 2540
+  },
+  {
+   "at": "2026-11-10T16:54:15.426Z",
+   "job": "dongjeon",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "dongjeon_071.png"
+   ],
+   "tokens": 2539
+  },
+  {
+   "at": "2026-11-10T16:55:04.657Z",
+   "job": "gasigong",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "gasigong_072.png"
+   ],
+   "tokens": 2543
+  },
+  {
+   "at": "2026-11-10T16:55:59.296Z",
+   "job": "meari",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "meari_073.png"
+   ],
+   "tokens": 2537
+  },
+  {
+   "at": "2026-11-10T16:57:24.473Z",
+   "job": "geuneul",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "geuneul_074.png"
+   ],
+   "tokens": 2537
+  },
+  {
+   "at": "2026-11-10T16:58:12.482Z",
+   "job": "nunbora",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "nunbora_075.png"
+   ],
+   "tokens": 2539
+  },
+  {
+   "at": "2026-11-10T16:59:02.449Z",
+   "job": "byeolttong",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "byeolttong_076.png"
+   ],
+   "tokens": 2546
+  },
+  {
+   "at": "2026-11-10T17:00:15.517Z",
+   "job": "hwanggeum",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "hwanggeum_077.png"
+   ],
+   "tokens": 2539
+  },
+  {
+   "at": "2026-11-10T17:00:57.756Z",
+   "job": "ssangdung",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "ssangdung_078.png"
+   ],
+   "tokens": 2548
+  },
+  {
+   "at": "2026-11-10T17:02:16.473Z",
+   "job": "eggs",
+   "model": "gemini-3.1-flash-image",
+   "refs": 2,
+   "images": 1,
+   "cost": 0.0692,
+   "files": [
+    "eggs_079.png"
+   ],
+   "tokens": 3576
   }
  ]
 }

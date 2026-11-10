@@ -1,0 +1,78 @@
+{
+ "style": "Keep EXACTLY the art style of the style reference image: same crisp pixel-art look, thick dark outlines, soft cel shading, rich colors and cute chibi proportions. Generate exactly ONE image.",
+ "dragonParts": "Create a PARTS SHEET of this baby dragon for cut-out (puppet) animation in a 2D side-view game, facing RIGHT. Solid flat pure magenta background (#FF00FF), no shadows, no ground, no text. Draw each part separately with clear magenta gaps, all at the same scale, each with its own dark outline, in a neat 3x3 grid in this order: (1) head with horns, eyes open; (2) the same head with eyes happily closed; (3) torso with belly only; (4) front arm; (5) back arm; (6) front leg; (7) back leg; (8) one bat wing spread open; (9) tail. Rich detail: scales, belly stripes, highlights.",
+ "jobs": [
+  {
+   "id": "sapjil",
+   "kind": "dragonParts",
+   "ref": "ref_dragons.webp",
+   "desc": "A new baby dragon in the same style and proportions as the baby dragons in image 1: SAPJIL, a brown mole-like digging dragon with miner goggles and a little shovel-shaped tail tip (rare) IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts."
+  },
+  {
+   "id": "pokjuk",
+   "kind": "dragonParts",
+   "ref": "ref_dragons.webp",
+   "desc": "A new baby dragon in the same style and proportions as the baby dragons in image 1: POKJUK, a red-and-yellow striped FIRECRACKER dragon with a lit fuse on its head, like a firework rocket (rare) IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts."
+  },
+  {
+   "id": "sommung",
+   "kind": "dragonParts",
+   "ref": "ref_dragons.webp",
+   "desc": "A new baby dragon in the same style and proportions as the baby dragons in image 1: SOMMUNG, a very round fluffy white COTTON-BALL dragon, puffy fur, tiny wings, sleepy cute face (rare) IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts."
+  },
+  {
+   "id": "dongjeon",
+   "kind": "dragonParts",
+   "ref": "ref_dragons.webp",
+   "desc": "A new baby dragon in the same style and proportions as the baby dragons in image 1: DONGJEON, a golden COIN dragon with coin-shaped scales and a shiny coin mark on the forehead (rare) IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts."
+  },
+  {
+   "id": "gasigong",
+   "kind": "dragonParts",
+   "ref": "ref_dragons.webp",
+   "desc": "A new baby dragon in the same style and proportions as the baby dragons in image 1: GASIGONG, a CHESTNUT-BURR dragon covered with sharp brown spikes, round body, fierce little eyes (super, sparkly outline) IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts."
+  },
+  {
+   "id": "meari",
+   "kind": "dragonParts",
+   "ref": "ref_dragons.webp",
+   "desc": "A new baby dragon in the same style and proportions as the baby dragons in image 1: MEARI, a purple ECHO dragon with huge bat ears, a big mouth and sound-wave ring marks (super) IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts."
+  },
+  {
+   "id": "geuneul",
+   "kind": "dragonParts",
+   "ref": "ref_dragons.webp",
+   "desc": "A new baby dragon in the same style and proportions as the baby dragons in image 1: GEUNEUL, a sleek dark navy SHADOW dragon with glowing violet eyes and a smoky wisp tail (super) IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts."
+  },
+  {
+   "id": "nunbora",
+   "kind": "dragonParts",
+   "ref": "ref_dragons.webp",
+   "desc": "A new baby dragon in the same style and proportions as the baby dragons in image 1: NUNBORA, a white-blue SNOWSTORM dragon with a snowflake crest and a frosty swirling mane (super) IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts."
+  },
+  {
+   "id": "byeolttong",
+   "kind": "dragonParts",
+   "ref": "ref_dragons.webp",
+   "desc": "A new baby dragon in the same style and proportions as the baby dragons in image 1: BYEOLTTONG, a COSMIC dragon: deep blue body full of tiny stars, star-shaped horns, a glowing comet tail (legend, majestic) IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts."
+  },
+  {
+   "id": "hwanggeum",
+   "kind": "dragonParts",
+   "ref": "ref_dragons.webp",
+   "desc": "A new baby dragon in the same style and proportions as the baby dragons in image 1: HWANGGEUM, a big golden dragon KING wearing cracked golden egg-shell armor and a small crown (legend, majestic) IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts."
+  },
+  {
+   "id": "ssangdung",
+   "kind": "dragonParts",
+   "ref": "ref_dragons.webp",
+   "desc": "A new baby dragon in the same style and proportions as the baby dragons in image 1: SSANGDUNG, a TWO-HEADED dragon: one red head and one blue head, bickering; draw BOTH heads together as ONE head piece (legend) IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts."
+  },
+  {
+   "id": "eggs",
+   "kind": "custom",
+   "ref": "ref_dragons.webp",
+   "desc": "Dragon EGG props for a hatchery screen, same pixel-art style as image 1. Solid flat pure magenta background (#FF00FF), each item separate with its own dark outline, neat 3x2 grid in this order: (1) a cream egg with BLUE spots (rare); (2) a cream egg with PURPLE swirls (super); (3) a shiny GOLD egg with star marks (legend); (4) the top half of a cracked egg shell; (5) the bottom half of a cracked egg shell; (6) a bright white-yellow sparkle burst. IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts."
+  }
+ ]
+}
