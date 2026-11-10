@@ -1,7 +1,7 @@
 {
  "cap": 60,
  "approved": "2026-11-11 대표님 «10달러 이내로 에셋을 만들어봐» (시험판: 꼬물이 · 어슬렁 좀비 · 드래곤 성) / 2026-11-11 대표님 «총 60달러 이내에서 계속 진행, 더 필요하면 꼭 물어보고» → 한도 $60",
- "spent": 1.4795,
+ "spent": 1.7519,
  "items": [
   {
    "at": "2026-11-10T14:26:53.350Z",
@@ -231,6 +231,54 @@
     "funB_019.png"
    ],
    "tokens": 3642
+  },
+  {
+   "at": "2026-11-10T15:27:34.910Z",
+   "job": "skull",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "skull_020.png"
+   ],
+   "tokens": 2581
+  },
+  {
+   "at": "2026-11-10T15:27:59.583Z",
+   "job": "chili",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "chili_021.png"
+   ],
+   "tokens": 2579
+  },
+  {
+   "at": "2026-11-10T15:28:39.353Z",
+   "job": "lava",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "lava_022.png"
+   ],
+   "tokens": 2577
+  },
+  {
+   "at": "2026-11-10T15:29:49.535Z",
+   "job": "bomb",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "bomb_023.png"
+   ],
+   "tokens": 2573
   }
  ]
 }
