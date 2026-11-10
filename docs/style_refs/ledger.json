@@ -1,0 +1,32 @@
+{
+ "cap": 10,
+ "approved": "2026-11-11 대표님 «10달러 이내로 에셋을 만들어봐» (시험판: 꼬물이 · 어슬렁 좀비 · 드래곤 성)",
+ "spent": 0.3174,
+ "items": [
+  {
+   "at": "2026-11-10T14:26:53.350Z",
+   "job": "kkomul_parts",
+   "model": "gemini-3-pro-image",
+   "refs": 2,
+   "images": 2,
+   "cost": 0.2702,
+   "files": [
+    "kkomul_parts_001_0.png",
+    "kkomul_parts_001_1.png"
+   ],
+   "tokens": 2769
+  },
+  {
+   "at": "2026-11-10T14:27:36.058Z",
+   "job": "walker_parts",
+   "model": "gemini-3.1-flash-image",
+   "refs": 2,
+   "images": 1,
+   "cost": 0.0472,
+   "files": [
+    "walker_parts_002.png"
+   ],
+   "tokens": 3210
+  }
+ ]
+}
