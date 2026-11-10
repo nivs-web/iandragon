@@ -1,0 +1,214 @@
+{
+ "style": "Keep EXACTLY the art style of the style reference image: same crisp pixel-art look, thick dark outlines, soft cel shading, rich colors and cute chibi proportions. Generate exactly ONE image.",
+ "dragonParts": "Create a PARTS SHEET of this baby dragon for cut-out (puppet) animation in a 2D side-view game, facing RIGHT. Solid flat pure magenta background (#FF00FF), no shadows, no ground, no text. Draw each part separately with clear magenta gaps, all at the same scale, each with its own dark outline, in a neat 3x3 grid in this order: (1) head with horns, eyes open; (2) the same head with eyes happily closed; (3) torso with belly only; (4) front arm; (5) back arm; (6) front leg; (7) back leg; (8) one bat wing spread open; (9) tail. Rich detail: scales, belly stripes, highlights.",
+ "zombieParts": "Create a PARTS SHEET of this zombie for cut-out (puppet) animation in a 2D side-view game, facing LEFT. Solid flat pure magenta background (#FF00FF), no shadows, no ground, no text. Draw each part separately with clear magenta gaps, all at the same scale, each with its own dark outline, in a neat 3x3 grid in this order: (1) head without the lower jaw, eyes open; (2) the same head blinking or with one eye closed; (3) lower jaw with teeth; (4) torso with clothes only; (5) front arm reaching forward with fingers; (6) back arm reaching forward with fingers; (7) front leg with shoe; (8) back leg with shoe; (9) the hat or prop. Rich detail: torn clothes, stitches, rotten skin spots.",
+ "jobs": [
+  {
+   "id": "bangul",
+   "kind": "dragonParts",
+   "ref": "ref_dragons.webp",
+   "desc": "A new baby dragon in the same style and proportions as the baby dragons in image 1: BANGUL, a round light-blue WATER dragon with fin ears, a water droplet mark on the forehead, bubbles, small fin-like wings IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts."
+  },
+  {
+   "id": "dungsil",
+   "kind": "dragonParts",
+   "ref": "ref_dragons.webp",
+   "desc": "A new baby dragon in the same style and proportions as the baby dragons in image 1: DUNGSIL, a fluffy CLOUD dragon with white-lavender cotton fur, puffy cloud wings, sleepy happy eyes IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts."
+  },
+  {
+   "id": "giljjuk",
+   "kind": "dragonParts",
+   "ref": "ref_dragons.webp",
+   "desc": "A new baby dragon in the same style and proportions as the baby dragons in image 1: GILJJUK, a tall slim yellow-green dragon with a very long neck, sharp focused eyes like a sniper IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts."
+  },
+  {
+   "id": "eoreum",
+   "kind": "dragonParts",
+   "ref": "ref_dragons.webp",
+   "desc": "A new baby dragon in the same style and proportions as the baby dragons in image 1: EOREUM, a pale cyan ICE dragon with icicle spikes on the back, crystal horns, frosty cheeks IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts."
+  },
+  {
+   "id": "jjirit",
+   "kind": "dragonParts",
+   "ref": "ref_dragons.webp",
+   "desc": "A new baby dragon in the same style and proportions as the baby dragons in image 1: JJIRIT, a yellow ELECTRIC dragon with a lightning-bolt tail tip, zig-zag stripes, spiky crackling crest IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts."
+  },
+  {
+   "id": "aquantis",
+   "kind": "custom",
+   "ref": "ref_dragons.webp",
+   "styleRef": "ref_castles_b.webp",
+   "desc": "A heroic young LEADER dragon, a bit bigger and cooler than the baby dragons of image 1, same art style: AQUANTIS, a teal-blue sea dragon with fins and a wave-shaped crest. Create a PARTS SHEET for cut-out animation, side view facing RIGHT, solid flat pure magenta background (#FF00FF), each part separate with its own dark outline, neat 3x3 grid in this order: (1) head with closed mouth; (2) same head with eyes closed; (3) same head with mouth wide open roaring (no fire, just open mouth); (4) torso with belly scales; (5) front arm with claws; (6) back leg; (7) front leg; (8) one large wing spread; (9) tail. IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts."
+  },
+  {
+   "id": "forestia",
+   "kind": "custom",
+   "ref": "ref_dragons.webp",
+   "styleRef": "ref_castles_b.webp",
+   "desc": "A heroic young LEADER dragon, a bit bigger and cooler than the baby dragons of image 1, same art style: FORESTIA, a green forest dragon with leafy wings, vines and small flowers. Create a PARTS SHEET for cut-out animation, side view facing RIGHT, solid flat pure magenta background (#FF00FF), each part separate with its own dark outline, neat 3x3 grid in this order: (1) head with closed mouth; (2) same head with eyes closed; (3) same head with mouth wide open roaring (no fire, just open mouth); (4) torso with belly scales; (5) front arm with claws; (6) back leg; (7) front leg; (8) one large wing spread; (9) tail. IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts."
+  },
+  {
+   "id": "crimsonde",
+   "kind": "custom",
+   "ref": "ref_dragons.webp",
+   "styleRef": "ref_castles_b.webp",
+   "desc": "A heroic young LEADER dragon, a bit bigger and cooler than the baby dragons of image 1, same art style: CRIMSONDE, a crimson red fire dragon with a flame mane and ember spots. Create a PARTS SHEET for cut-out animation, side view facing RIGHT, solid flat pure magenta background (#FF00FF), each part separate with its own dark outline, neat 3x3 grid in this order: (1) head with closed mouth; (2) same head with eyes closed; (3) same head with mouth wide open roaring (no fire, just open mouth); (4) torso with belly scales; (5) front arm with claws; (6) back leg; (7) front leg; (8) one large wing spread; (9) tail. IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts."
+  },
+  {
+   "id": "volttail",
+   "kind": "custom",
+   "ref": "ref_dragons.webp",
+   "styleRef": "ref_castles_b.webp",
+   "desc": "A heroic young LEADER dragon, a bit bigger and cooler than the baby dragons of image 1, same art style: VOLTTAIL, a purple and yellow storm dragon with a lightning tail and glowing stripes. Create a PARTS SHEET for cut-out animation, side view facing RIGHT, solid flat pure magenta background (#FF00FF), each part separate with its own dark outline, neat 3x3 grid in this order: (1) head with closed mouth; (2) same head with eyes closed; (3) same head with mouth wide open roaring (no fire, just open mouth); (4) torso with belly scales; (5) front arm with claws; (6) back leg; (7) front leg; (8) one large wing spread; (9) tail. IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts."
+  },
+  {
+   "id": "solaris",
+   "kind": "custom",
+   "ref": "ref_dragons.webp",
+   "styleRef": "ref_castles_b.webp",
+   "desc": "A heroic young LEADER dragon, a bit bigger and cooler than the baby dragons of image 1, same art style: SOLARIS, a golden sun dragon with a radiant sun crest and white-gold wings. Create a PARTS SHEET for cut-out animation, side view facing RIGHT, solid flat pure magenta background (#FF00FF), each part separate with its own dark outline, neat 3x3 grid in this order: (1) head with closed mouth; (2) same head with eyes closed; (3) same head with mouth wide open roaring (no fire, just open mouth); (4) torso with belly scales; (5) front arm with claws; (6) back leg; (7) front leg; (8) one large wing spread; (9) tail. IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts."
+  },
+  {
+   "id": "wingz",
+   "kind": "zombieParts",
+   "ref": "ref_zombies.webp",
+   "desc": "World 3 (sky). A zombie with big tattered bat wings on its back, aviator goggles. Part 9 = one tattered bat wing alone. IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts. Each leg is a SINGLE leg."
+  },
+  {
+   "id": "balloon",
+   "kind": "zombieParts",
+   "ref": "ref_zombies.webp",
+   "desc": "World 3 (sky). A goofy zombie floating while holding three colorful balloons. Part 9 = the bunch of three balloons with strings. IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts. Each leg is a SINGLE leg."
+  },
+  {
+   "id": "penguin",
+   "kind": "zombieParts",
+   "ref": "ref_zombies.webp",
+   "desc": "World 4 (ice). A zombie PENGUIN: black and white body, flippers as arms, webbed orange feet as legs, cracked beak. Part 9 = a small knitted winter cap. IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts. Each leg is a SINGLE leg."
+  },
+  {
+   "id": "snowball",
+   "kind": "zombieParts",
+   "ref": "ref_zombies.webp",
+   "desc": "World 4 (ice). A zombie stuck inside a big round dirty snowball body, only head, arms and legs sticking out. Part 9 = a carrot. IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts. Each leg is a SINGLE leg."
+  },
+  {
+   "id": "icicle",
+   "kind": "zombieParts",
+   "ref": "ref_zombies.webp",
+   "desc": "World 4 (ice). A frosty blue-skinned zombie archer with frozen hair, throwing icicles. Part 9 = one long icicle spear. IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts. Each leg is a SINGLE leg."
+  },
+  {
+   "id": "can",
+   "kind": "zombieParts",
+   "ref": "ref_zombies.webp",
+   "desc": "World 5 (scrap metal). A zombie wearing armor made of dented tin cans and bolts. Part 9 = a tin-can helmet. IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts. Each leg is a SINGLE leg."
+  },
+  {
+   "id": "gear",
+   "kind": "zombieParts",
+   "ref": "ref_zombies.webp",
+   "desc": "World 5 (scrap metal). A zombie KNIGHT in rusty armor holding a big gear as a shield. Part 9 = the big rusty gear shield. IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts. Each leg is a SINGLE leg."
+  },
+  {
+   "id": "bat",
+   "kind": "custom",
+   "ref": "ref_zombies.webp",
+   "desc": "World 3 (sky). A cute creepy ZOMBIE BAT in the same style as image 1 zombies. Create a PARTS SHEET, side view facing LEFT, solid flat pure magenta background (#FF00FF), each part separate with its own dark outline, neat 3x2 grid in this order: (1) round furry body with head, eyes open, little fangs, no wings; (2) the same body with eyes closed; (3) one bat wing spread wide; (4) the same wing folded up; (5) tiny clawed feet; (6) a small stitched ear. IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts."
+  },
+  {
+   "id": "cart",
+   "kind": "custom",
+   "ref": "ref_zombies.webp",
+   "desc": "World 5 (scrap metal). A zombie riding a rusty MINE CART, in the same style as image 1 zombies. Create a PARTS SHEET, side view facing LEFT, solid flat pure magenta background (#FF00FF), each part separate with its own dark outline, neat 3x2 grid in this order: (1) the rusty mine cart body WITHOUT wheels; (2) one cart wheel; (3) zombie head eyes open, crazy grin; (4) the same head eyes closed; (5) zombie upper body (torso) with both arms raised up, no head; (6) lower jaw with teeth. IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts."
+  },
+  {
+   "id": "bossVolcano",
+   "kind": "custom",
+   "ref": "ref_zombies.webp",
+   "desc": "A HUGE BOSS in the same style as image 1 zombies, three times taller than a normal zombie: VOLCANO ZOMBIE KING, a giant zombie made of black volcanic rock with glowing lava veins, wearing a crown of magma, holding a lava hammer. Create a PARTS SHEET for cut-out animation, side view facing LEFT, solid flat pure magenta background (#FF00FF), each part separate with its own dark outline, neat 3x3 grid in this order: (1) head without lower jaw with magma crown, angry eyes; (2) same head eyes closed; (3) big lower jaw; (4) massive torso; (5) front arm holding a lava hammer; (6) back arm; (7) front leg; (8) back leg; (9) a small floating lava rock. IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts."
+  },
+  {
+   "id": "bossRider",
+   "kind": "custom",
+   "ref": "ref_zombies.webp",
+   "desc": "A HUGE BOSS in the same style as image 1 zombies, three times taller than a normal zombie: ZOMBIE RIDER, a skinny zombie knight riding a HUGE zombie bat-dragon mount. Create a PARTS SHEET for cut-out animation, side view facing LEFT, solid flat pure magenta background (#FF00FF), each part separate with its own dark outline, neat 3x3 grid in this order: (1) the mount head with jaw open, angry; (2) the same mount head eyes closed; (3) the mount body (no wings, no legs); (4) one big tattered wing spread; (5) mount front leg with claws; (6) mount back leg with claws; (7) the zombie rider (whole, sitting, with a lance); (8) mount tail; (9) a saddle. IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts."
+  },
+  {
+   "id": "bossAvalanche",
+   "kind": "custom",
+   "ref": "ref_zombies.webp",
+   "desc": "A HUGE BOSS in the same style as image 1 zombies, three times taller than a normal zombie: AVALANCHE GIANT, a giant zombie yeti made of dirty snow and ice chunks, icicle beard, glowing blue eyes. Create a PARTS SHEET for cut-out animation, side view facing LEFT, solid flat pure magenta background (#FF00FF), each part separate with its own dark outline, neat 3x3 grid in this order: (1) head without lower jaw; (2) same head eyes closed; (3) big lower jaw with icicle teeth; (4) massive snowy torso; (5) front arm with huge fist; (6) back arm; (7) front leg; (8) back leg; (9) a big snowball. IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts."
+  },
+  {
+   "id": "bossRobot",
+   "kind": "custom",
+   "ref": "ref_zombies.webp",
+   "desc": "A HUGE BOSS in the same style as image 1 zombies, three times taller than a normal zombie: SCRAP KING ROBOT, a giant robot made of rusty scrap metal with a glass dome on top holding a little zombie pilot, smoke pipes. Create a PARTS SHEET for cut-out animation, side view facing LEFT, solid flat pure magenta background (#FF00FF), each part separate with its own dark outline, neat 3x3 grid in this order: (1) the glass dome head with the zombie pilot inside, eyes open; (2) the same dome with pilot eyes closed; (3) a robot jaw plate; (4) massive scrap-metal torso with pipes; (5) front arm with a claw hand; (6) back arm; (7) front leg; (8) back leg; (9) a gear. IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts."
+  },
+  {
+   "id": "bg_w02",
+   "kind": "custom",
+   "ref": "ref_backgrounds.webp",
+   "styleRef": "ref_backgrounds.webp",
+   "size": "2K",
+   "aspect": "21:9",
+   "desc": "World theme: VOLCANO at night: dark red-violet sky with ember sparks, distant erupting volcano, lava rivers glowing in the distance, charred rocks, black obsidian graves, a burnt dead tree, an iron fence. Wide side-scrolling 2D game BACKGROUND in exactly the art style of image 1 (rich pixel art, night, moody lighting). Layout rules (very important): the top edge of the walkable ground (grass or soil line) is a straight horizontal line at exactly 81% of the image height; the bottom 19% is a solid underground soil band with embedded rocks and a few bones. Always include these landmarks: a bare dead tree on the FAR LEFT with one thick horizontal branch; a big round glowing moon in the upper middle; distant castle or tower silhouettes with a few small lit windows on the right; a long low fence or railing standing on the ground in the right half; three or four small grave-like stones on the ground in the left half. NO characters, NO creatures, NO text."
+  },
+  {
+   "id": "bg_w03",
+   "kind": "custom",
+   "ref": "ref_backgrounds.webp",
+   "styleRef": "ref_backgrounds.webp",
+   "size": "2K",
+   "aspect": "21:9",
+   "desc": "World theme: SKY ISLANDS at night: floating islands, big clouds below, distant floating castle with lit windows, wooden graves on the island ground, a windswept dead tree, a rope-and-plank railing. Wide side-scrolling 2D game BACKGROUND in exactly the art style of image 1 (rich pixel art, night, moody lighting). Layout rules (very important): the top edge of the walkable ground (grass or soil line) is a straight horizontal line at exactly 81% of the image height; the bottom 19% is a solid underground soil band with embedded rocks and a few bones. Always include these landmarks: a bare dead tree on the FAR LEFT with one thick horizontal branch; a big round glowing moon in the upper middle; distant castle or tower silhouettes with a few small lit windows on the right; a long low fence or railing standing on the ground in the right half; three or four small grave-like stones on the ground in the left half. NO characters, NO creatures, NO text."
+  },
+  {
+   "id": "bg_w04",
+   "kind": "custom",
+   "ref": "ref_backgrounds.webp",
+   "styleRef": "ref_backgrounds.webp",
+   "size": "2K",
+   "aspect": "21:9",
+   "desc": "World theme: ICE land at night: aurora in the sky, snowy hills, frozen castle with lit windows, ice-covered graves, a frosted dead tree, a snowy wooden fence. Wide side-scrolling 2D game BACKGROUND in exactly the art style of image 1 (rich pixel art, night, moody lighting). Layout rules (very important): the top edge of the walkable ground (grass or soil line) is a straight horizontal line at exactly 81% of the image height; the bottom 19% is a solid underground soil band with embedded rocks and a few bones. Always include these landmarks: a bare dead tree on the FAR LEFT with one thick horizontal branch; a big round glowing moon in the upper middle; distant castle or tower silhouettes with a few small lit windows on the right; a long low fence or railing standing on the ground in the right half; three or four small grave-like stones on the ground in the left half. NO characters, NO creatures, NO text."
+  },
+  {
+   "id": "bg_w05",
+   "kind": "custom",
+   "ref": "ref_backgrounds.webp",
+   "styleRef": "ref_backgrounds.webp",
+   "size": "2K",
+   "aspect": "21:9",
+   "desc": "World theme: SCRAP-METAL junkyard factory at night: smokestacks, rusty pipes, distant factory towers with lit windows, scrap piles, rusty metal grave markers, a dead tree with metal bits, a chain-link fence. Wide side-scrolling 2D game BACKGROUND in exactly the art style of image 1 (rich pixel art, night, moody lighting). Layout rules (very important): the top edge of the walkable ground (grass or soil line) is a straight horizontal line at exactly 81% of the image height; the bottom 19% is a solid underground soil band with embedded rocks and a few bones. Always include these landmarks: a bare dead tree on the FAR LEFT with one thick horizontal branch; a big round glowing moon in the upper middle; distant castle or tower silhouettes with a few small lit windows on the right; a long low fence or railing standing on the ground in the right half; three or four small grave-like stones on the ground in the left half. NO characters, NO creatures, NO text."
+  },
+  {
+   "id": "castle_w02",
+   "kind": "custom",
+   "ref": "ref_castles_a.webp",
+   "styleRef": "ref_castles_a.webp",
+   "desc": "Image 1 shows castle art. Draw ONE zombie tower for a game, made of black volcanic rock with lava cracks, skull on top, red banners, in exactly the same art style, front view. Draw it FOUR times in a 2x2 grid on a solid flat pure magenta background (#FF00FF) with wide gaps: (1) undamaged; (2) cracked a little; (3) badly damaged with missing bricks; (4) almost ruined, broken top, smoke. Same size and position in each cell, each with its own dark outline. IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts."
+  },
+  {
+   "id": "castle_w03",
+   "kind": "custom",
+   "ref": "ref_castles_a.webp",
+   "styleRef": "ref_castles_a.webp",
+   "desc": "Image 1 shows castle art. Draw ONE zombie tower for a game, a floating zombie fortress on a small rock island with tattered wing-shaped banners, in exactly the same art style, front view. Draw it FOUR times in a 2x2 grid on a solid flat pure magenta background (#FF00FF) with wide gaps: (1) undamaged; (2) cracked a little; (3) badly damaged with missing bricks; (4) almost ruined, broken top, smoke. Same size and position in each cell, each with its own dark outline. IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts."
+  },
+  {
+   "id": "castle_w04",
+   "kind": "custom",
+   "ref": "ref_castles_a.webp",
+   "styleRef": "ref_castles_a.webp",
+   "desc": "Image 1 shows castle art. Draw ONE zombie tower for a game, made of ice blocks and snow, frozen skull ornament, icicles, in exactly the same art style, front view. Draw it FOUR times in a 2x2 grid on a solid flat pure magenta background (#FF00FF) with wide gaps: (1) undamaged; (2) cracked a little; (3) badly damaged with missing bricks; (4) almost ruined, broken top, smoke. Same size and position in each cell, each with its own dark outline. IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts."
+  },
+  {
+   "id": "castle_w05",
+   "kind": "custom",
+   "ref": "ref_castles_a.webp",
+   "styleRef": "ref_castles_a.webp",
+   "desc": "Image 1 shows castle art. Draw ONE zombie tower for a game, made of rusty scrap metal, pipes, gears and a glowing skull sign, in exactly the same art style, front view. Draw it FOUR times in a 2x2 grid on a solid flat pure magenta background (#FF00FF) with wide gaps: (1) undamaged; (2) cracked a little; (3) badly damaged with missing bricks; (4) almost ruined, broken top, smoke. Same size and position in each cell, each with its own dark outline. IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts."
+  }
+ ]
+}

@@ -1,0 +1,69 @@
+{
+ "style": "Keep EXACTLY the art style of the style reference image: same crisp pixel-art look, thick dark outlines, soft cel shading, rich colors and cute chibi proportions. Generate exactly ONE image.",
+ "dragonParts": "Create a PARTS SHEET of this baby dragon for cut-out (puppet) animation in a 2D side-view game, facing RIGHT. Solid flat pure magenta background (#FF00FF), no shadows, no ground, no text. Draw each part separately with clear magenta gaps, all at the same scale, each with its own dark outline, in a neat 3x3 grid in this order: (1) head with horns, eyes open; (2) the same head with eyes happily closed; (3) torso with belly only; (4) front arm; (5) back arm; (6) front leg; (7) back leg; (8) one bat wing spread open; (9) tail. Rich detail: scales, belly stripes, highlights.",
+ "jobs": [
+  {
+   "id": "doldeung_2",
+   "base": "doldeung",
+   "kind": "dragonParts",
+   "ref": "gen/doldeung_004.png",
+   "desc": "Image 1 shows the parts of a baby dragon. Draw the EVOLVED (second) form of the SAME dragon, same colors and face, slightly bigger and braver: BAWI-DEUNGI (rock back): bigger rocky shell plates with moss, sturdier legs. IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels). NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts. Keep the SAME part order and layout as image 1."
+  },
+  {
+   "id": "bulttong_2",
+   "base": "bulttong",
+   "kind": "dragonParts",
+   "ref": "gen/bulttong_008.png",
+   "desc": "Image 1 shows the parts of a baby dragon. Draw the EVOLVED (second) form of the SAME dragon, same colors and face, slightly bigger and braver: BULKKOCHI (flame): a small flame crest on the head, glowing ember belly, tail tip on fire. IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels). NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts. Keep the SAME part order and layout as image 1."
+  },
+  {
+   "id": "twetwe_2",
+   "base": "twetwe",
+   "kind": "dragonParts",
+   "ref": "gen/twetwe_005.png",
+   "desc": "Image 1 shows the parts of a baby dragon. Draw the EVOLVED (second) form of the SAME dragon, same colors and face, slightly bigger and braver: TWETWETWE: bigger cheeks, three little spikes on the head, dripping goo tail. IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels). NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts. Keep the SAME part order and layout as image 1."
+  },
+  {
+   "id": "ssaeng_2",
+   "base": "ssaeng",
+   "kind": "dragonParts",
+   "ref": "gen/ssaeng_006.png",
+   "desc": "Image 1 shows the parts of a baby dragon. Draw the EVOLVED (second) form of the SAME dragon, same colors and face, slightly bigger and braver: BEONJJEOK SSAENG: lightning-streak stripes, swept-back wing tips, speed scarf. IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels). NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts. Keep the SAME part order and layout as image 1."
+  },
+  {
+   "id": "bangul_2",
+   "base": "bangul",
+   "kind": "dragonParts",
+   "ref": "gen/bangul_029.png",
+   "desc": "Image 1 shows the parts of a baby dragon. Draw the EVOLVED (second) form of the SAME dragon, same colors and face, slightly bigger and braver: MUL-BANGUL (water drop): a bubble crown, wave-patterned fins, splashing tail. IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels). NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts. Keep the SAME part order and layout as image 1."
+  },
+  {
+   "id": "dungsil_2",
+   "base": "dungsil",
+   "kind": "dragonParts",
+   "ref": "gen/dungsil_034.png",
+   "desc": "Image 1 shows the parts of a baby dragon. Draw the EVOLVED (second) form of the SAME dragon, same colors and face, slightly bigger and braver: MUNGGE DUNGSIL: fluffier cloud fur, a tiny rain cloud floating over the head. IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels). NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts. Keep the SAME part order and layout as image 1."
+  },
+  {
+   "id": "giljjuk_2",
+   "base": "giljjuk",
+   "kind": "dragonParts",
+   "ref": "gen/giljjuk_035.png",
+   "desc": "Image 1 shows the parts of a baby dragon. Draw the EVOLVED (second) form of the SAME dragon, same colors and face, slightly bigger and braver: JJUKJJUK: even longer neck, a scope-like eye patch, slim armored tail. IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels). NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts. Keep the SAME part order and layout as image 1."
+  },
+  {
+   "id": "eoreum_2",
+   "base": "eoreum",
+   "kind": "dragonParts",
+   "ref": "gen/eoreum_043.png",
+   "desc": "Image 1 shows the parts of a baby dragon. Draw the EVOLVED (second) form of the SAME dragon, same colors and face, slightly bigger and braver: KKONGKKONG: bigger ice crystal horns, frost aura spikes on the back. IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels). NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts. Keep the SAME part order and layout as image 1."
+  },
+  {
+   "id": "jjirit_2",
+   "base": "jjirit",
+   "kind": "dragonParts",
+   "ref": "gen/jjirit_051.png",
+   "desc": "Image 1 shows the parts of a baby dragon. Draw the EVOLVED (second) form of the SAME dragon, same colors and face, slightly bigger and braver: JJIRIRIT: crackling electric mane, double lightning tail, glowing yellow stripes. IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference (visible square pixels). NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts. Keep the SAME part order and layout as image 1."
+  }
+ ]
+}

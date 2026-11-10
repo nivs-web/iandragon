@@ -1,7 +1,7 @@
 {
  "cap": 60,
  "approved": "2026-11-11 대표님 «10달러 이내로 에셋을 만들어봐» (시험판: 꼬물이 · 어슬렁 좀비 · 드래곤 성) / 2026-11-11 대표님 «총 60달러 이내에서 계속 진행, 더 필요하면 꼭 물어보고» → 한도 $60",
- "spent": 1.8925,
+ "spent": 4.6317,
  "items": [
   {
    "at": "2026-11-10T14:26:53.350Z",
@@ -313,6 +313,472 @@
     "funC_026.png"
    ],
    "tokens": 3662
+  },
+  {
+   "at": "2026-11-10T16:00:40.544Z",
+   "job": "bg_w02",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.1021,
+   "files": [
+    "bg_w02_027.png"
+   ],
+   "tokens": 3063
+  },
+  {
+   "at": "2026-11-10T16:01:09.521Z",
+   "job": "castle_w02",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "castle_w02_028.png"
+   ],
+   "tokens": 2450
+  },
+  {
+   "at": "2026-11-10T16:01:37.585Z",
+   "job": "bangul",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "bangul_029.png"
+   ],
+   "tokens": 2542
+  },
+  {
+   "at": "2026-11-10T16:02:34.820Z",
+   "job": "bossVolcano",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "bossVolcano_030.png"
+   ],
+   "tokens": 2504
+  },
+  {
+   "at": "2026-11-10T16:03:54.749Z",
+   "job": "aquantis",
+   "model": "gemini-3.1-flash-image",
+   "refs": 2,
+   "images": 1,
+   "cost": 0.0692,
+   "files": [
+    "aquantis_031.png"
+   ],
+   "tokens": 3619
+  },
+  {
+   "at": "2026-11-10T16:04:45.570Z",
+   "job": "bg_w03",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.1021,
+   "files": [
+    "bg_w03_032.png"
+   ],
+   "tokens": 3063
+  },
+  {
+   "at": "2026-11-10T16:05:36.478Z",
+   "job": "castle_w03",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "castle_w03_033.png"
+   ],
+   "tokens": 2451
+  },
+  {
+   "at": "2026-11-10T16:07:01.355Z",
+   "job": "dungsil",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "dungsil_034.png"
+   ],
+   "tokens": 2537
+  },
+  {
+   "at": "2026-11-10T16:07:36.417Z",
+   "job": "giljjuk",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "giljjuk_035.png"
+   ],
+   "tokens": 2536
+  },
+  {
+   "at": "2026-11-10T16:09:02.023Z",
+   "job": "wingz",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "wingz_036.png"
+   ],
+   "tokens": 2553
+  },
+  {
+   "at": "2026-11-10T16:09:45.757Z",
+   "job": "balloon",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "balloon_037.png"
+   ],
+   "tokens": 2548
+  },
+  {
+   "at": "2026-11-10T16:10:36.305Z",
+   "job": "bat",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "bat_038.png"
+   ],
+   "tokens": 2460
+  },
+  {
+   "at": "2026-11-10T16:11:48.971Z",
+   "job": "bossRider",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "bossRider_039.png"
+   ],
+   "tokens": 2509
+  },
+  {
+   "at": "2026-11-10T16:12:40.477Z",
+   "job": "forestia",
+   "model": "gemini-3.1-flash-image",
+   "refs": 2,
+   "images": 1,
+   "cost": 0.0692,
+   "files": [
+    "forestia_040.png"
+   ],
+   "tokens": 3616
+  },
+  {
+   "at": "2026-11-10T16:14:06.775Z",
+   "job": "bg_w04",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.1021,
+   "files": [
+    "bg_w04_041.png"
+   ],
+   "tokens": 3054
+  },
+  {
+   "at": "2026-11-10T16:14:41.438Z",
+   "job": "castle_w04",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "castle_w04_042.png"
+   ],
+   "tokens": 2497
+  },
+  {
+   "at": "2026-11-10T16:15:36.681Z",
+   "job": "eoreum",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "eoreum_043.png"
+   ],
+   "tokens": 2607
+  },
+  {
+   "at": "2026-11-10T16:16:50.915Z",
+   "job": "penguin",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "penguin_044.png"
+   ],
+   "tokens": 2563
+  },
+  {
+   "at": "2026-11-10T16:17:34.494Z",
+   "job": "snowball",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "snowball_045.png"
+   ],
+   "tokens": 2553
+  },
+  {
+   "at": "2026-11-10T16:18:53.916Z",
+   "job": "icicle",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "icicle_046.png"
+   ],
+   "tokens": 2552
+  },
+  {
+   "at": "2026-11-10T16:19:39.464Z",
+   "job": "bossAvalanche",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "bossAvalanche_047.png"
+   ],
+   "tokens": 2495
+  },
+  {
+   "at": "2026-11-10T16:21:02.314Z",
+   "job": "crimsonde",
+   "model": "gemini-3.1-flash-image",
+   "refs": 2,
+   "images": 1,
+   "cost": 0.0692,
+   "files": [
+    "crimsonde_048.png"
+   ],
+   "tokens": 3617
+  },
+  {
+   "at": "2026-11-10T16:21:51.999Z",
+   "job": "bg_w05",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.1021,
+   "files": [
+    "bg_w05_049.png"
+   ],
+   "tokens": 3066
+  },
+  {
+   "at": "2026-11-10T16:22:28.469Z",
+   "job": "castle_w05",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 0,
+   "cost": 0.0011,
+   "files": [],
+   "tokens": 1359
+  },
+  {
+   "at": "2026-11-10T16:23:42.749Z",
+   "job": "jjirit",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "jjirit_051.png"
+   ],
+   "tokens": 2539
+  },
+  {
+   "at": "2026-11-10T16:24:35.832Z",
+   "job": "can",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "can_052.png"
+   ],
+   "tokens": 2550
+  },
+  {
+   "at": "2026-11-10T16:26:01.235Z",
+   "job": "gear",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "gear_053.png"
+   ],
+   "tokens": 2552
+  },
+  {
+   "at": "2026-11-10T16:26:34.791Z",
+   "job": "cart",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "cart_054.png"
+   ],
+   "tokens": 2465
+  },
+  {
+   "at": "2026-11-10T16:27:54.359Z",
+   "job": "bossRobot",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "bossRobot_055.png"
+   ],
+   "tokens": 2509
+  },
+  {
+   "at": "2026-11-10T16:28:37.996Z",
+   "job": "volttail",
+   "model": "gemini-3.1-flash-image",
+   "refs": 2,
+   "images": 1,
+   "cost": 0.0692,
+   "files": [
+    "volttail_056.png"
+   ],
+   "tokens": 3619
+  },
+  {
+   "at": "2026-11-10T16:29:55.948Z",
+   "job": "solaris",
+   "model": "gemini-3.1-flash-image",
+   "refs": 2,
+   "images": 1,
+   "cost": 0.0692,
+   "files": [
+    "solaris_057.png"
+   ],
+   "tokens": 3618
+  },
+  {
+   "at": "2026-11-10T16:30:58.319Z",
+   "job": "doldeung_2",
+   "model": "gemini-3.1-flash-image",
+   "refs": 2,
+   "images": 1,
+   "cost": 0.0692,
+   "files": [
+    "doldeung_2_058.png"
+   ],
+   "tokens": 3680
+  },
+  {
+   "at": "2026-11-10T16:31:42.905Z",
+   "job": "bulttong_2",
+   "model": "gemini-3.1-flash-image",
+   "refs": 2,
+   "images": 1,
+   "cost": 0.0692,
+   "files": [
+    "bulttong_2_059.png"
+   ],
+   "tokens": 3683
+  },
+  {
+   "at": "2026-11-10T16:33:25.622Z",
+   "job": "twetwe_2",
+   "model": "gemini-3.1-flash-image",
+   "refs": 2,
+   "images": 1,
+   "cost": 0.0692,
+   "files": [
+    "twetwe_2_060.png"
+   ],
+   "tokens": 3678
+  },
+  {
+   "at": "2026-11-10T16:33:58.129Z",
+   "job": "ssaeng_2",
+   "model": "gemini-3.1-flash-image",
+   "refs": 2,
+   "images": 1,
+   "cost": 0.0692,
+   "files": [
+    "ssaeng_2_061.png"
+   ],
+   "tokens": 3680
+  },
+  {
+   "at": "2026-11-10T16:34:45.883Z",
+   "job": "bangul_2",
+   "model": "gemini-3.1-flash-image",
+   "refs": 2,
+   "images": 1,
+   "cost": 0.0692,
+   "files": [
+    "bangul_2_062.png"
+   ],
+   "tokens": 3679
+  },
+  {
+   "at": "2026-11-10T16:35:34.950Z",
+   "job": "dungsil_2",
+   "model": "gemini-3.1-flash-image",
+   "refs": 2,
+   "images": 1,
+   "cost": 0.0692,
+   "files": [
+    "dungsil_2_063.png"
+   ],
+   "tokens": 3679
+  },
+  {
+   "at": "2026-11-10T16:36:55.567Z",
+   "job": "giljjuk_2",
+   "model": "gemini-3.1-flash-image",
+   "refs": 2,
+   "images": 1,
+   "cost": 0.0692,
+   "files": [
+    "giljjuk_2_064.png"
+   ],
+   "tokens": 3678
+  },
+  {
+   "at": "2026-11-10T16:37:40.506Z",
+   "job": "eoreum_2",
+   "model": "gemini-3.1-flash-image",
+   "refs": 2,
+   "images": 1,
+   "cost": 0.0692,
+   "files": [
+    "eoreum_2_065.png"
+   ],
+   "tokens": 3675
   }
  ]
 }
