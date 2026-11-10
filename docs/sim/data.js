@@ -73,9 +73,9 @@ const enemies = {
   // 1 초록 언덕 (속성 없음)
   walker:  { name: '어슬렁 좀비', w: 1, hp: 90, atk: 12, range: 40, speed: 60, fore: 0.35, back: 0.75, kb: 2, bounty: 18 },
   pup:     { name: '뼈다귀 멍멍이', w: 1, hp: 60, atk: 9, range: 40, speed: 130, fore: 0.20, back: 0.40, kb: 2, bounty: 14 },
-  chubby:  { name: '통통 좀비', w: 1, hp: 420, atk: 30, range: 45, speed: 45, fore: 0.50, back: 1.00, kb: 2, bounty: 60 },
+  chubby:  { name: '고깔 좀비', w: 1, hp: 420, atk: 30, range: 45, speed: 45, fore: 0.50, back: 1.00, kb: 2, bounty: 60 },
   archer:  { name: '새총 좀비', w: 1, hp: 110, atk: 26, range: 240, speed: 55, fore: 0.60, back: 1.20, kb: 2, bounty: 40 },
-  shield:  { name: '냄비뚜껑 좀비', w: 1, hp: 900, atk: 22, range: 45, speed: 42, fore: 0.50, back: 1.00, kb: 1, bounty: 110 },
+  shield:  { name: '헬멧 좀비', w: 1, hp: 900, atk: 22, range: 45, speed: 42, fore: 0.50, back: 1.00, kb: 1, bounty: 110 },
   fart:    { name: '방귀 좀비', w: 1, hp: 200, atk: 12, range: 70, speed: 55, fore: 0.60, back: 1.40, kb: 2, bounty: 45, area: true, splash: 40, knock: 0.6 },
   // 2 부글부글 화산 (빨강)
   skull:   { name: '불타는 해골', w: 2, hp: 160, atk: 34, range: 40, speed: 140, fore: 0.20, back: 0.50, kb: 3, bounty: 45, traits: ['red'] },
@@ -117,7 +117,7 @@ const enemies = {
   gold:    { name: '황금 좀비', w: 0, hp: 260, atk: 6, range: 40, speed: 95, fore: 0.30, back: 0.90, kb: 4, bounty: 160, gold: true },
 
   // ── 월드 보스 10
-  bossFat:      { name: '뚱보 좀비 대장', w: 1, boss: true, hp: 2600, atk: 90, range: 90, speed: 36, fore: 0.80, back: 1.40, kb: 4, bounty: 400, area: true, splash: 30 },
+  bossFat:      { name: '거대 좀비', w: 1, boss: true, hp: 2600, atk: 90, range: 90, speed: 36, fore: 0.80, back: 1.40, kb: 4, bounty: 400, area: true, splash: 30 },
   bossVolcano:  { name: '화산 좀비 킹', w: 2, boss: true, hp: 4200, atk: 150, range: 120, speed: 34, fore: 0.90, back: 1.50, kb: 4, bounty: 600, area: true, splash: 50, traits: ['red'] },
   bossRider:    { name: '좀비 라이더', w: 3, boss: true, hp: 3600, atk: 110, range: 300, speed: 50, fore: 0.80, back: 1.40, kb: 5, bounty: 700, area: true, splash: 40, traits: ['wing'] },
   bossAvalanche:{ name: '눈사태 거인', w: 4, boss: true, hp: 6000, atk: 130, range: 140, speed: 30, fore: 1.00, back: 1.60, kb: 3, bounty: 900, area: true, splash: 60, traits: ['ice'], freeze: { chance: 0.4, time: 1.5 } },
