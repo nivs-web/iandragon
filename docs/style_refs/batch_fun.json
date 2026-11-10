@@ -12,6 +12,18 @@
    "kind": "custom",
    "ref": "ref_backgrounds.webp",
    "desc": "Image 1 is the game background (spooky moonlit night). Create a SPRITE SHEET of small decorative background animation props for this game, side view, chunky pixel art. Solid flat pure magenta background (#FF00FF), no shadows, no ground, NO text, NO numbers, NO grid lines, NO frames. Draw each item separately with wide clear magenta gaps, each with its own thick dark outline, in a neat 3x3 arrangement in this exact order (left to right, top to bottom): (1) a blue-green will-o-wisp ghost flame, tall flicker; (2) the same wisp flame, round flicker; (3) the same wisp flame, leaning flicker; (4) a small cute purple bat with wings UP; (5) the same bat with wings DOWN; (6) a green zombie hand rising from the ground with fingers open, wrist with torn sleeve; (7) the same zombie hand waving bent to the side; (8) the same zombie hand holding a little red flower; (9) a dark grey storm cloud whose shape forms a spooky grinning skull face."
+  },
+  {
+   "id": "funC",
+   "kind": "custom",
+   "ref": "ref_backgrounds.webp",
+   "desc": "Image 1 is the game background (spooky moonlit night). Create a SPRITE SHEET of small decorative background animation props for this game, side view, chunky pixel art, cute and funny. Solid flat pure magenta background (#FF00FF), no shadows, no ground, NO text, NO numbers, NO grid lines, NO frames. Draw each item separately with wide clear magenta gaps, each with its own thick dark outline, in a neat 3x3 arrangement in this exact order (left to right, top to bottom): (1) an old wooden grave cross, upright; (2) the same wooden cross snapped in two broken pieces; (3) a funny skeleton zombie rising, both bony arms raised up, ragged cloth, glowing eyes; (4) a collapsed pile of scattered bones with the skull on top; (5) a funny skeleton zombie flying on a broomstick facing RIGHT, ragged scarf flowing; (6) a cute round owl perched, big open eyes; (7) the same owl with eyes closed and head turned sideways; (8) a jack-o-lantern pumpkin with a calm face, dim candle; (9) the same jack-o-lantern with a huge wide grin, glowing bright orange."
+  },
+  {
+   "id": "funD",
+   "kind": "custom",
+   "ref": "ref_backgrounds.webp",
+   "desc": "Image 1 is the game background (spooky moonlit night). Create a SPRITE SHEET of small decorative background animation props for this game, side view, chunky pixel art, cute and funny. Solid flat pure magenta background (#FF00FF), no shadows, no ground, NO text, NO numbers, NO grid lines, NO frames. Draw each item separately with wide clear magenta gaps, each with its own thick dark outline, in a neat 3x3 arrangement in this exact order (left to right, top to bottom): (1) a cute small black spider with big eyes, hanging, legs spread; (2) a solid black silhouette of a little zombie dancing with arms up; (3) the same black silhouette dancing in a different pose, one leg kicked; (4) a funny mole zombie head with a miner helmet lamp, peeking, big eyes, no body; (5) a small brown dirt mound; (6) a single cartoon bone; (7) a single cartoon skull; (8) a few small dirt clods; (9) a small grey rounded tombstone."
   }
  ]
 }
