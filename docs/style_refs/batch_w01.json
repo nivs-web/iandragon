@@ -92,6 +92,12 @@
    "kind": "zombieParts",
    "ref": "ref_zombies.webp",
    "desc": "A rare GOLDEN zombie in the same style as image 1's zombies: shiny gold skin, coin eyes, carrying a sack of gold coins, sparkles. Part 9 = the sack of coins. IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference zombies (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO borders, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts. Each leg is a SINGLE leg (not a pair of pants)."
+  },
+  {
+   "id": "helmet3",
+   "kind": "zombieParts",
+   "ref": "ref_zombies.webp",
+   "desc": "A zombie football player in the same style as image 1's zombies: RED football helmet with face guard, big shoulder pads, torn plain red jersey, charging pose. Part 9 = the red helmet. IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference zombies (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO borders, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts. Each leg is a SINGLE leg (not a pair of pants). ABSOLUTELY NO numbers, letters or text anywhere — not on the jersey, not on the helmet (the art is mirrored in game, so text would read backwards)."
   }
  ]
 }
