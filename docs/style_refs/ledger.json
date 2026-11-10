@@ -1,7 +1,7 @@
 {
  "cap": 60,
  "approved": "2026-11-11 대표님 «10달러 이내로 에셋을 만들어봐» (시험판: 꼬물이 · 어슬렁 좀비 · 드래곤 성) / 2026-11-11 대표님 «총 60달러 이내에서 계속 진행, 더 필요하면 꼭 물어보고» → 한도 $60",
- "spent": 4.6317,
+ "spent": 4.769,
  "items": [
   {
    "at": "2026-11-10T14:26:53.350Z",
@@ -779,6 +779,30 @@
     "eoreum_2_065.png"
    ],
    "tokens": 3675
+  },
+  {
+   "at": "2026-11-10T16:39:02.469Z",
+   "job": "jjirit_2",
+   "model": "gemini-3.1-flash-image",
+   "refs": 2,
+   "images": 1,
+   "cost": 0.0692,
+   "files": [
+    "jjirit_2_066.png"
+   ],
+   "tokens": 3676
+  },
+  {
+   "at": "2026-11-10T16:39:44.283Z",
+   "job": "castle_w05",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "castle_w05_067.png"
+   ],
+   "tokens": 2449
   }
  ]
 }
