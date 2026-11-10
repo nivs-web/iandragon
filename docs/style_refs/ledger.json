@@ -1,7 +1,7 @@
 {
  "cap": 60,
  "approved": "2026-11-11 대표님 «10달러 이내로 에셋을 만들어봐» (시험판: 꼬물이 · 어슬렁 좀비 · 드래곤 성) / 2026-11-11 대표님 «총 60달러 이내에서 계속 진행, 더 필요하면 꼭 물어보고» → 한도 $60",
- "spent": 5.6554,
+ "spent": 8.2133,
  "items": [
   {
    "at": "2026-11-10T14:26:53.350Z",
@@ -959,6 +959,426 @@
     "helmet3_080.png"
    ],
    "tokens": 2608
+  },
+  {
+   "at": "2026-11-10T21:27:54.903Z",
+   "job": "bg_w06",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.1021,
+   "files": [
+    "bg_w06_081.png"
+   ],
+   "tokens": 3049
+  },
+  {
+   "at": "2026-11-10T21:28:29.660Z",
+   "job": "bg_w07",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.1021,
+   "files": [
+    "bg_w07_082.png"
+   ],
+   "tokens": 3054
+  },
+  {
+   "at": "2026-11-10T21:29:07.072Z",
+   "job": "bg_w08",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.1021,
+   "files": [
+    "bg_w08_083.png"
+   ],
+   "tokens": 3048
+  },
+  {
+   "at": "2026-11-10T21:29:40.622Z",
+   "job": "bg_w09",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.1021,
+   "files": [
+    "bg_w09_084.png"
+   ],
+   "tokens": 3050
+  },
+  {
+   "at": "2026-11-10T21:30:14.776Z",
+   "job": "bg_w10",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.1021,
+   "files": [
+    "bg_w10_085.png"
+   ],
+   "tokens": 3049
+  },
+  {
+   "at": "2026-11-10T21:30:42.131Z",
+   "job": "castle_w06",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "castle_w06_086.png"
+   ],
+   "tokens": 2453
+  },
+  {
+   "at": "2026-11-10T21:31:11.959Z",
+   "job": "castle_w07",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "castle_w07_087.png"
+   ],
+   "tokens": 2456
+  },
+  {
+   "at": "2026-11-10T21:31:55.444Z",
+   "job": "castle_w08",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "castle_w08_088.png"
+   ],
+   "tokens": 2457
+  },
+  {
+   "at": "2026-11-10T21:32:44.706Z",
+   "job": "castle_w09",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "castle_w09_089.png"
+   ],
+   "tokens": 2455
+  },
+  {
+   "at": "2026-11-10T21:33:59.829Z",
+   "job": "castle_w10",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "castle_w10_090.png"
+   ],
+   "tokens": 2457
+  },
+  {
+   "at": "2026-11-10T21:34:43.086Z",
+   "job": "ghost",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "ghost_091.png"
+   ],
+   "tokens": 2563
+  },
+  {
+   "at": "2026-11-10T21:36:05.164Z",
+   "job": "bones",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "bones_092.png"
+   ],
+   "tokens": 2561
+  },
+  {
+   "at": "2026-11-10T21:36:48.271Z",
+   "job": "mole",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "mole_093.png"
+   ],
+   "tokens": 2557
+  },
+  {
+   "at": "2026-11-10T21:38:03.148Z",
+   "job": "scarab",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "scarab_094.png"
+   ],
+   "tokens": 2565
+  },
+  {
+   "at": "2026-11-10T21:38:46.734Z",
+   "job": "mummy",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "mummy_095.png"
+   ],
+   "tokens": 2556
+  },
+  {
+   "at": "2026-11-10T21:39:59.146Z",
+   "job": "golem",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "golem_096.png"
+   ],
+   "tokens": 2564
+  },
+  {
+   "at": "2026-11-10T21:40:46.659Z",
+   "job": "shade",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "shade_097.png"
+   ],
+   "tokens": 2562
+  },
+  {
+   "at": "2026-11-10T21:41:43.361Z",
+   "job": "frog",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "frog_098.png"
+   ],
+   "tokens": 2559
+  },
+  {
+   "at": "2026-11-10T21:43:03.655Z",
+   "job": "shroom",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "shroom_099.png"
+   ],
+   "tokens": 2564
+  },
+  {
+   "at": "2026-11-10T21:43:48.697Z",
+   "job": "shard",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "shard_100.png"
+   ],
+   "tokens": 2559
+  },
+  {
+   "at": "2026-11-10T21:44:44.457Z",
+   "job": "crystal",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "crystal_101.png"
+   ],
+   "tokens": 2554
+  },
+  {
+   "at": "2026-11-10T21:46:11.311Z",
+   "job": "prism",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "prism_102.png"
+   ],
+   "tokens": 2556
+  },
+  {
+   "at": "2026-11-10T21:46:43.070Z",
+   "job": "knight",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "knight_103.png"
+   ],
+   "tokens": 2560
+  },
+  {
+   "at": "2026-11-10T21:47:42.334Z",
+   "job": "dragonling",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "dragonling_104.png"
+   ],
+   "tokens": 2563
+  },
+  {
+   "at": "2026-11-10T21:49:08.924Z",
+   "job": "bossGhost",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "bossGhost_105.png"
+   ],
+   "tokens": 2494
+  },
+  {
+   "at": "2026-11-10T21:49:44.531Z",
+   "job": "bossPharaoh",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "bossPharaoh_106.png"
+   ],
+   "tokens": 2494
+  },
+  {
+   "at": "2026-11-10T21:51:09.047Z",
+   "job": "bossWitch",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "bossWitch_107.png"
+   ],
+   "tokens": 2520
+  },
+  {
+   "at": "2026-11-10T21:51:44.162Z",
+   "job": "bossCrystal",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "bossCrystal_108.png"
+   ],
+   "tokens": 2491
+  },
+  {
+   "at": "2026-11-10T21:52:42.167Z",
+   "job": "bossLord",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "bossLord_109.png"
+   ],
+   "tokens": 2506
+  },
+  {
+   "at": "2026-11-10T21:53:59.940Z",
+   "job": "sandscale",
+   "model": "gemini-3.1-flash-image",
+   "refs": 2,
+   "images": 1,
+   "cost": 0.0692,
+   "files": [
+    "sandscale_110.png"
+   ],
+   "tokens": 3625
+  },
+  {
+   "at": "2026-11-10T21:54:56.733Z",
+   "job": "shadowfen",
+   "model": "gemini-3.1-flash-image",
+   "refs": 2,
+   "images": 1,
+   "cost": 0.0692,
+   "files": [
+    "shadowfen_111.png"
+   ],
+   "tokens": 3624
+  },
+  {
+   "at": "2026-11-10T21:57:12.828Z",
+   "job": "goldrex",
+   "model": "gemini-3.1-flash-image",
+   "refs": 2,
+   "images": 1,
+   "cost": 0.0692,
+   "files": [
+    "goldrex_112.png"
+   ],
+   "tokens": 3621
+  },
+  {
+   "at": "2026-11-10T21:57:41.219Z",
+   "job": "banjjak",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "banjjak_113.png"
+   ],
+   "tokens": 2539
+  },
+  {
+   "at": "2026-11-10T21:58:56.794Z",
+   "job": "kungkwang",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "kungkwang_114.png"
+   ],
+   "tokens": 2546
+  },
+  {
+   "at": "2026-11-10T22:00:18.721Z",
+   "job": "frostwing",
+   "model": "gemini-3.1-flash-image",
+   "refs": 2,
+   "images": 1,
+   "cost": 0.0692,
+   "files": [
+    "frostwing_115.png"
+   ],
+   "tokens": 3626
   }
  ]
 }
