@@ -1,0 +1,17 @@
+{
+ "style": "Keep EXACTLY the art style of the style reference image: same crisp pixel-art look, thick dark outlines, soft cel shading, rich colors and cute chibi proportions. Generate exactly ONE image.",
+ "jobs": [
+  {
+   "id": "funA",
+   "kind": "custom",
+   "ref": "ref_backgrounds.webp",
+   "desc": "Image 1 is the game background (spooky moonlit night). Create a SPRITE SHEET of small decorative background animation props for this game, side view, chunky pixel art. Solid flat pure magenta background (#FF00FF), no shadows, no ground, NO text, NO numbers, NO grid lines, NO frames. Draw each item separately with wide clear magenta gaps, each with its own thick dark outline, in a neat 3x3 arrangement in this exact order (left to right, top to bottom): (1) a zombie riding a bicycle WITHOUT its two wheels (frame, pedals, rider), with a tiny cute baby dragon sitting in the front basket, facing RIGHT; (2) one single bicycle wheel with spokes, seen from the side; (3) a big round full moon disc with a cute smiling face and open eyes, pale cream-pink like the moon in image 1; (4) the same moon disc winking one eye; (5) the same moon disc yawning with a big open mouth and closed eyes; (6) a little zombie witch flying on a broomstick facing RIGHT; (7) a translucent pale-blue ghost cat walking, body and legs WITHOUT its tail, facing RIGHT; (8) the ghost cat curly tail alone; (9) a cute white bedsheet ghost peeking with both little hands up saying boo."
+  },
+  {
+   "id": "funB",
+   "kind": "custom",
+   "ref": "ref_backgrounds.webp",
+   "desc": "Image 1 is the game background (spooky moonlit night). Create a SPRITE SHEET of small decorative background animation props for this game, side view, chunky pixel art. Solid flat pure magenta background (#FF00FF), no shadows, no ground, NO text, NO numbers, NO grid lines, NO frames. Draw each item separately with wide clear magenta gaps, each with its own thick dark outline, in a neat 3x3 arrangement in this exact order (left to right, top to bottom): (1) a blue-green will-o-wisp ghost flame, tall flicker; (2) the same wisp flame, round flicker; (3) the same wisp flame, leaning flicker; (4) a small cute purple bat with wings UP; (5) the same bat with wings DOWN; (6) a green zombie hand rising from the ground with fingers open, wrist with torn sleeve; (7) the same zombie hand waving bent to the side; (8) the same zombie hand holding a little red flower; (9) a dark grey storm cloud whose shape forms a spooky grinning skull face."
+  }
+ ]
+}

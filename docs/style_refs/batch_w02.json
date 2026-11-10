@@ -1,0 +1,31 @@
+{
+ "style": "Keep EXACTLY the art style of the style reference image: same crisp pixel-art look, thick dark outlines, soft cel shading, rich colors and cute chibi proportions. Generate exactly ONE image.",
+ "zombieParts": "Create a PARTS SHEET of this zombie for cut-out (puppet) animation in a 2D side-view game, facing LEFT. Solid flat pure magenta background (#FF00FF), no shadows, no ground, no text. Draw each part separately with clear magenta gaps, all at the same scale, each with its own dark outline, in a neat 3x3 grid in this order: (1) head without the lower jaw, eyes open; (2) the same head blinking or with one eye closed; (3) lower jaw with teeth; (4) torso with clothes only; (5) front arm reaching forward with fingers; (6) back arm reaching forward with fingers; (7) front leg with shoe; (8) back leg with shoe; (9) the hat or prop. Rich detail: torn clothes, stitches, rotten skin spots.",
+ "dragonParts": "Create a PARTS SHEET of this baby dragon for cut-out (puppet) animation in a 2D side-view game, facing RIGHT. Solid flat pure magenta background (#FF00FF), no shadows, no ground, no text. Draw each part separately with clear magenta gaps, all at the same scale, each with its own dark outline, in a neat 3x3 grid in this order: (1) head with horns, eyes open; (2) the same head with eyes happily closed; (3) torso with belly only; (4) front arm; (5) back arm; (6) front leg; (7) back leg; (8) one bat wing spread open; (9) tail. Rich detail: scales, belly stripes, highlights.",
+ "jobs": [
+  {
+   "id": "skull",
+   "kind": "zombieParts",
+   "ref": "ref_zombies.webp",
+   "desc": "World 2 (volcano). A fast skinny SKELETON zombie whose skull head is on fire with orange-red flames, cracked bones, ragged dark shorts, in the same style as image 1 zombies. Part 9 = a separate flame tuft for the top of the skull. IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference zombies (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts. Each leg is a SINGLE leg."
+  },
+  {
+   "id": "chili",
+   "kind": "zombieParts",
+   "ref": "ref_zombies.webp",
+   "desc": "World 2 (volcano). A zombie wearing a big RED CHILI PEPPER costume (the pepper covers the torso, green stem hat on top), angry spicy face with steam, in the same style as image 1 zombies. Part 9 = the green pepper-stem hat. IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference zombies (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts. Each leg is a SINGLE leg."
+  },
+  {
+   "id": "lava",
+   "kind": "zombieParts",
+   "ref": "ref_zombies.webp",
+   "desc": "World 2 (volcano). A big round chunky LAVA ROCK zombie: dark cracked rock body with glowing orange lava cracks, tiny stubby legs, heavy rock fists, in the same style as image 1 zombies. Part 9 = a small floating lava rock chunk. IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference zombies (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts. Each leg is a SINGLE leg."
+  },
+  {
+   "id": "bomb",
+   "kind": "zombieParts",
+   "ref": "ref_zombies.webp",
+   "desc": "World 2 (volcano). A goofy zombie hugging a huge round black BOMB with a lit sparking fuse, wild eyes, singed hair, in the same style as image 1 zombies. Part 9 = the big black bomb with lit fuse. IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference zombies (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts. Each leg is a SINGLE leg."
+  }
+ ]
+}
