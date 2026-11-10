@@ -1,7 +1,7 @@
 {
- "cap": 10,
- "approved": "2026-11-11 대표님 «10달러 이내로 에셋을 만들어봐» (시험판: 꼬물이 · 어슬렁 좀비 · 드래곤 성)",
- "spent": 0.3174,
+ "cap": 60,
+ "approved": "2026-11-11 대표님 «10달러 이내로 에셋을 만들어봐» (시험판: 꼬물이 · 어슬렁 좀비 · 드래곤 성) / 2026-11-11 대표님 «총 60달러 이내에서 계속 진행, 더 필요하면 꼭 물어보고» → 한도 $60",
+ "spent": 1.3411,
  "items": [
   {
    "at": "2026-11-10T14:26:53.350Z",
@@ -27,6 +27,186 @@
     "walker_parts_002.png"
    ],
    "tokens": 3210
+  },
+  {
+   "at": "2026-11-10T14:39:56.109Z",
+   "job": "kkomul2",
+   "model": "gemini-3.1-flash-image",
+   "refs": 2,
+   "images": 1,
+   "cost": 0.0692,
+   "files": [
+    "kkomul2_003.png"
+   ],
+   "tokens": 3616
+  },
+  {
+   "at": "2026-11-10T14:40:14.561Z",
+   "job": "doldeung",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "doldeung_004.png"
+   ],
+   "tokens": 2489
+  },
+  {
+   "at": "2026-11-10T14:40:46.705Z",
+   "job": "twetwe",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "twetwe_005.png"
+   ],
+   "tokens": 2541
+  },
+  {
+   "at": "2026-11-10T14:41:04.284Z",
+   "job": "ssaeng",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "ssaeng_006.png"
+   ],
+   "tokens": 2489
+  },
+  {
+   "at": "2026-11-10T14:41:57.824Z",
+   "job": "archer",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "archer_007.png"
+   ],
+   "tokens": 2512
+  },
+  {
+   "at": "2026-11-10T14:43:13.594Z",
+   "job": "bulttong",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "bulttong_008.png"
+   ],
+   "tokens": 2487
+  },
+  {
+   "at": "2026-11-10T14:44:01.572Z",
+   "job": "pup",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "pup_009.png"
+   ],
+   "tokens": 2473
+  },
+  {
+   "at": "2026-11-10T14:44:55.434Z",
+   "job": "cone",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "cone_010.png"
+   ],
+   "tokens": 2507
+  },
+  {
+   "at": "2026-11-10T14:46:04.606Z",
+   "job": "helmet",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "helmet_011.png"
+   ],
+   "tokens": 2514
+  },
+  {
+   "at": "2026-11-10T14:47:20.277Z",
+   "job": "fart",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "fart_012.png"
+   ],
+   "tokens": 2514
+  },
+  {
+   "at": "2026-11-10T14:48:06.490Z",
+   "job": "gold",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "gold_013.png"
+   ],
+   "tokens": 2510
+  },
+  {
+   "at": "2026-11-10T14:49:20.363Z",
+   "job": "bossGiant",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "bossGiant_014.png"
+   ],
+   "tokens": 2499
+  },
+  {
+   "at": "2026-11-10T14:50:08.122Z",
+   "job": "novart",
+   "model": "gemini-3.1-flash-image",
+   "refs": 2,
+   "images": 1,
+   "cost": 0.0692,
+   "files": [
+    "novart_015.png"
+   ],
+   "tokens": 3581
+  },
+  {
+   "at": "2026-11-10T14:52:10.955Z",
+   "job": "helmet2",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "helmet2_016.png"
+   ],
+   "tokens": 2576
+  },
+  {
+   "at": "2026-11-10T14:52:38.830Z",
+   "job": "gold2",
+   "model": "gemini-3.1-flash-image",
+   "refs": 1,
+   "images": 1,
+   "cost": 0.0681,
+   "files": [
+    "gold2_017.png"
+   ],
+   "tokens": 2572
   }
  ]
 }

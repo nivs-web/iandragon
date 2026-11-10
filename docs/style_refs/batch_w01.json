@@ -1,0 +1,97 @@
+{
+ "style": "Keep EXACTLY the art style of the style reference image: same crisp pixel-art look, thick dark outlines, soft cel shading, rich colors and cute chibi proportions. Generate exactly ONE image.",
+ "dragonParts": "Create a PARTS SHEET of this baby dragon for cut-out (puppet) animation in a 2D side-view game, facing RIGHT. Solid flat pure magenta background (#FF00FF), no shadows, no ground, no text. Draw each part separately with clear magenta gaps, all at the same scale, each with its own dark outline, in a neat 3x3 grid in this order: (1) head with horns, eyes open; (2) the same head with eyes happily closed; (3) torso with belly only; (4) front arm; (5) back arm; (6) front leg; (7) back leg; (8) one bat wing spread open; (9) tail. Rich detail: scales, belly stripes, highlights.",
+ "zombieParts": "Create a PARTS SHEET of this zombie for cut-out (puppet) animation in a 2D side-view game, facing LEFT. Solid flat pure magenta background (#FF00FF), no shadows, no ground, no text. Draw each part separately with clear magenta gaps, all at the same scale, each with its own dark outline, in a neat 3x3 grid in this order: (1) head without the lower jaw, eyes open; (2) the same head blinking or with one eye closed; (3) lower jaw with teeth; (4) torso with clothes only; (5) front arm reaching forward with fingers; (6) back arm reaching forward with fingers; (7) front leg with shoe; (8) back leg with shoe; (9) the hat or prop. Rich detail: torn clothes, stitches, rotten skin spots.",
+ "jobs": [
+  {
+   "id": "kkomul2",
+   "kind": "dragonParts",
+   "ref": "gen/kkomul_parts_001_0.png",
+   "desc": "Image 1 shows the parts of a green baby dragon. Draw the EVOLVED form of the same dragon: slightly bigger and braver, longer horns, small leaf-like spikes on the back, a sprout on the head."
+  },
+  {
+   "id": "doldeung",
+   "kind": "dragonParts",
+   "ref": "",
+   "desc": "A sturdy brown-grey baby dragon like a little turtle, with a big mossy rock shell on its back, stubby legs, small horns, calm determined face (a tank that protects friends)."
+  },
+  {
+   "id": "bulttong",
+   "kind": "dragonParts",
+   "ref": "ref_dragons.webp",
+   "desc": "Image 1: use the angry RED dragon (top row, second from left) as the exact character: a small fiery red dragon with a flame-tipped tail, brave fierce face."
+  },
+  {
+   "id": "twetwe",
+   "kind": "dragonParts",
+   "ref": "ref_dragons.webp",
+   "desc": "Image 1: use the surprised YELLOW dragon (top row, fourth from left) as the exact character: a round yellow dragon with big puffy cheeks that spits goo."
+  },
+  {
+   "id": "ssaeng",
+   "kind": "dragonParts",
+   "ref": "ref_dragons.webp",
+   "desc": "Image 1: use the BLUE dragon (top row, third from left) as the exact character, but make it a sleek fast wind dragon with swept-back horns and a cool confident face."
+  },
+  {
+   "id": "pup",
+   "kind": "custom",
+   "ref": "ref_zombies.webp",
+   "desc": "Image 1: use the zombie DOG (top row, fourth from left) as the exact character. Create a PARTS SHEET for cut-out animation, side view facing LEFT, solid flat pure magenta background (#FF00FF), no text, each part separate with its own dark outline, neat 3x3 grid in this order: (1) head without lower jaw; (2) same head with eyes closed; (3) lower jaw with tongue; (4) body with exposed ribs; (5) front-left leg; (6) front-right leg; (7) back-left leg; (8) back-right leg; (9) bony tail."
+  },
+  {
+   "id": "cone",
+   "kind": "zombieParts",
+   "ref": "ref_zombies.webp",
+   "desc": "Image 1: use the zombie wearing an ORANGE TRAFFIC CONE hat (bottom row, sixth from left) as the exact character. Part 9 = the orange traffic cone hat."
+  },
+  {
+   "id": "helmet",
+   "kind": "zombieParts",
+   "ref": "ref_zombies.webp",
+   "desc": "A zombie football player in the same style as image 1's zombies: RED football helmet with face guard, big shoulder pads, torn jersey with number 13, charging pose. Part 9 = the red helmet."
+  },
+  {
+   "id": "archer",
+   "kind": "zombieParts",
+   "ref": "ref_zombies.webp",
+   "desc": "Image 1: use the zombie with the RED CAP (top row, fifth from left) as the exact character, holding a slingshot and winking one eye to aim. Part 9 = the slingshot."
+  },
+  {
+   "id": "fart",
+   "kind": "zombieParts",
+   "ref": "ref_zombies.webp",
+   "desc": "Image 1: use the CHUBBY zombie (top row, second from left) as the exact character: a fat gassy zombie holding its belly, green gas puffs. Part 9 = a green gas cloud puff."
+  },
+  {
+   "id": "gold",
+   "kind": "zombieParts",
+   "ref": "ref_zombies.webp",
+   "desc": "A rare GOLDEN zombie in the same style as image 1's zombies: shiny gold skin, coin eyes, carrying a sack of gold coins, sparkles. Part 9 = the sack of coins."
+  },
+  {
+   "id": "bossGiant",
+   "kind": "custom",
+   "ref": "ref_zombies.webp",
+   "desc": "A HUGE giant brute zombie boss in the same style as image 1's zombies (like the big red brute, bottom row last), three times taller than a normal zombie, dragging a wooden telephone pole as a club, with a TINY zombie riding on its back. Create a PARTS SHEET for cut-out animation, side view facing LEFT, solid flat pure magenta background (#FF00FF), no text, each part separate with its own dark outline, neat 3x3 grid in this order: (1) head without lower jaw, angry eyes; (2) same head with eyes closed; (3) big lower jaw with teeth; (4) massive torso with torn shirt; (5) front arm holding the telephone pole; (6) back arm; (7) front leg; (8) back leg; (9) the tiny zombie rider."
+  },
+  {
+   "id": "novart",
+   "kind": "custom",
+   "ref": "ref_castles_b.webp",
+   "desc": "Image 1: use the BLUE dragon sitting on top of the dragon castle (top row, first picture) as the exact character: a heroic young blue dragon leader with two horns, snout, large bat wings, spiked tail. Create a PARTS SHEET for cut-out animation, side view facing RIGHT, solid flat pure magenta background (#FF00FF), no text, each part separate with its own dark outline, neat 3x3 grid in this order: (1) head with closed mouth; (2) same head with eyes closed; (3) same head with mouth wide open breathing fire (no fire, just open mouth); (4) torso with belly scales; (5) front arm with claws; (6) back leg; (7) front leg; (8) large bat wing spread; (9) spiked tail."
+  },
+  {
+   "id": "helmet2",
+   "kind": "zombieParts",
+   "ref": "ref_zombies.webp",
+   "desc": "A zombie football player in the same style as image 1's zombies: RED football helmet with face guard, big shoulder pads, torn jersey with number 13, charging pose. Part 9 = the red helmet. IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference zombies (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO borders, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts. Each leg is a SINGLE leg (not a pair of pants)."
+  },
+  {
+   "id": "gold2",
+   "kind": "zombieParts",
+   "ref": "ref_zombies.webp",
+   "desc": "A rare GOLDEN zombie in the same style as image 1's zombies: shiny gold skin, coin eyes, carrying a sack of gold coins, sparkles. Part 9 = the sack of coins. IMPORTANT: chunky low-resolution PIXEL ART exactly like the reference zombies (visible square pixels), NOT smooth cartoon. NO grid lines, NO frames, NO borders, NO numbers, NO labels, NO text anywhere. Pure magenta background between parts. Each leg is a SINGLE leg (not a pair of pants)."
+  }
+ ]
+}
