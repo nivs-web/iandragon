@@ -22,10 +22,10 @@
 |---|---|---|---|---|---|
 | ⓪ | 난이도 4단계 · 레벨 선물 · 명예의 전당 (미리 허락 → 끝나면 배포) | 보조 S · D · H (Opus · 시작 뒤 수락이라 그대로) | `fs-idg-diff` `feat/idg-difficulty` · `iandragon-diff` `idg-difficulty` | — | 🟡 |
 | ① | 판정 대기 4건 비교 한 장 (브레스 v3 · 파워업 B2 · 전투 단추 · 캐슬 땅/깃발) | rigfix → 부장 | `fs-idg`(읽기만) · 원래 = 새 임시 폴더 673bb49 | — | 🟡 |
-| ② | 드래곤 · 드래곤캐슬 디자인 상세 지시서 | 겜부장 | `iandragon/docs` | — | 🟡 |
+| ② | 드래곤 · 드래곤캐슬 디자인 상세 지시서 → `IDG_ART_BRIEF.md` · 모으기 기획 → `IDG_COLLECTION_PLAN.md` | 겜부장 (+ Opus 검토자) | `iandragon/docs` | — | ✅ 지시서 · 🟡 검토 |
 | ③a | 선물 상자 그림 | 겜팀장 | `fs-idg-art` | — | 🟡 |
-| ③b | 캐슬 10단계 · 부서진 캐슬 · 장비 · 수호 불꽃 그림 | 겜팀장 (+ 겜보조 1 이 화면 끝나면) | `fs-idg-art` | ② | ⬜ |
-| ④ | 숫자 · 저장 설계 → `data/upgrades.js` | 핵심 보조 (Opus) | `fs-idg-castle` `feat/idg-castle` · `iandragon/docs/IDG_UPGRADES_SPEC.md` | — | 🟡 |
+| ③b | 캐슬 10단계(hp0 먼저 → 부장 OK) · 부서진 캐슬 · 장비 · 수호 불꽃 · «?» 드래곤 6 · 꾸미기 시트 | 겜팀장 | `fs-idg-art` | ② | 🟡 지시 보냄 |
+| ④ | 숫자 · 저장 설계 → `data/upgrades.js` · 물건 184개 `data/catalog.js` · «?» 드래곤 숫자 · 돈 맞춤 | 핵심 보조 (Opus) | `fs-idg-castle` `feat/idg-castle` · `iandragon/docs/IDG_UPGRADES_SPEC.md` | 검토 결과 | ⬜ 검토 뒤 시작 |
 | ⑤ | 전투 계산 : 수호 불꽃 · 캐슬 단계 · 장비 · 꾸미기 효과(1/5) + 정답표 | 핵심 보조 (Opus) | `iandragon-diff` 위에 · `fs-idg-castle` | ④ · ⓪ S | ⬜ |
 | ⑥a | 아이템 샵 · 꾸미기 창 위 메뉴 | 겜보조 1 | `fs-idg-shop` `feat/idg-shop` | ④ 의 모양(먼저 기획서 숫자로) | 🟡 |
 | ⑥b | 드래곤 구매 · 레벨 · 브레스 힘/사거리 · 캐슬 단계 · 장비 창 | 겜보조 2 | `fs-idg-upg` `feat/idg-upgrade-ui` | ④ 의 모양 | 🟡 |
@@ -55,3 +55,5 @@
 | 때 | 일 |
 |---|---|
 | 11/13 | 기획 수락 · 세션 모델 Sonnet 으로 · 레벨 선물 확정(최고 181 · 10레벨마다 랜덤 꾸미기 + 젬) · 꾸미기 효과 1/5 |
+| 11/13 | 대표님 핵심 임무 : 속도 절대 유지 · 모으기/꾸미기 재미가 어려움 · 초고수까지 · 샵 큰 메뉴 → 하위 메뉴 · 아이템 184 · 전설 30 · 신화 20 · «?» 드래곤 6 |
+| 11/13 | 지시 보냄 : 겜보조 1(샵 틀 · `fs-idg-shop`) · 겜보조 2(샵 드래곤/강화/캐슬/장비 칸 · `fs-idg-upg`) · rigfix(판정 4건 비교 사진) · 겜팀장(선물 상자 · «?» 카드 → 캐슬 hp0) |
