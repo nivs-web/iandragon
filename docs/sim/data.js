@@ -128,6 +128,9 @@ const enemies = {
   bossCrystal:  { name: '수정 드래곤 좀비', w: 9, boss: true, hp: 8000, atk: 190, range: 180, speed: 30, fore: 1.00, back: 1.60, kb: 3, bounty: 1800, area: true, splash: 60, traits: ['crystal'], barrier: 300 },
   bossLord:     { name: '좀비 드래곤 로드', w: 10, boss: true, hp: 14000, atk: 240, range: 220, speed: 26, fore: 1.10, back: 1.70, kbImmune: true, bounty: 3000, area: true, splash: 70, traits: ['red', 'giant'] },
 };
+// 굳센 좀비 4종 (초고수 전용 · 난이도 기획 B-4 규칙 3, 2026-11-13) : 원본을 그대로 베끼고 밀치기 면역(kbImmune)만 더한다.
+// 이름 · 그림은 원본과 같다(firmOf = 원본 id). 보통 · 쉬움 · 어려움 판에는 나오지 않고 도감에도 따로 오르지 않는다.
+for (const id of ['shield', 'lava', 'gear', 'shroom']) enemies[id + 'Firm'] = { ...enemies[id], kbImmune: true, firmOf: id };
 
 // ── 리더(기지 위의 대장 드래곤) : 브레스 + 패시브. charge 초마다 한 번, 내 기지 앞 range 안의 적 전부
 // kb = 넉백 배수 · slow/freeze/weaken = 초 · strongVs = 그 속성에 2배 · trueDmg = 강철·방어막 무시 · focus = 체력 제일 많은 적에게 배수

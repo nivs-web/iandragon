@@ -24,6 +24,9 @@
 | `stages.generated.json` | **스테이지 100개 정의** (적 줄 · 배율 · 제한 시간 · 별 · 보상 · 해금) | 게임이 그대로 읽는다 |
 | `probe.js` | 스테이지 하나를 돌려 5초 단위 전황을 찍어 본다 | 한 스테이지를 들여다볼 때 |
 | `golden.js` → `golden.json` | **정답표** 300판 (스테이지 100 × 씨앗 101 · 102 · 103, 편성 · 정책 · 승패 · 틱 · 해시) | 게임 쪽 `npm run data:idg` 가 복사, `npm run qa:idg-core` 가 대조 (2026-11-10 B1 : 300/300) |
+| `diff/` | 어려움 · 초고수 맞춤 프로그램(`lib.js` 판 만들기 · `fit.js` · `refit.js` · `xcheck.js` · `remeasure.js` · `report.js` 합격선) + 판마다 결과 `diff/out/*.json` (2026-11-13 난이도 기획) | 키우기가 바뀌면 다시 돌린다 |
+| `stages.hard.generated.json` · `stages.master.generated.json` | 어려움 · 초고수 100판씩 (보통과 같은 모양 + `diff`, 초고수는 `key`) — `node diff/report.js --all` 이 쓴다 | 게임 `npm run data:idg` 가 `data/stages/hard.js · master.js` 로 옮긴다 |
+| `golden.diff.json` | 어려움 · 초고수 정답 60판 (`golden.js` 가 같이 뽑음) | 게임 `qa:idg-core` 가 대조 |
 
 ## 돌리는 법
 

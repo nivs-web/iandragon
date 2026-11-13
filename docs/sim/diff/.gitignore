@@ -1,0 +1,7 @@
+# 돌린 기록 · 중복 파일 (커밋하지 않음)
+*.out
+swapped0.txt
+out/stages.hard.json
+out/stages.master.json
+out/log.txt
+out/timing.json
