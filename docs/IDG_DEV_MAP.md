@@ -25,7 +25,7 @@
 | ② | 드래곤 · 드래곤캐슬 디자인 상세 지시서 → `IDG_ART_BRIEF.md` · 모으기 기획 → `IDG_COLLECTION_PLAN.md` | 겜부장 (+ Opus 검토자) | `iandragon/docs` | — | ✅ 지시서 · 🟡 검토 |
 | ③a | 선물 상자 그림 | 겜팀장 | `fs-idg-art` | — | 🟡 |
 | ③b | 캐슬 10단계(hp0 먼저 → 부장 OK) · 부서진 캐슬 · 장비 · 수호 불꽃 · «?» 드래곤 6 · 꾸미기 시트 | 겜팀장 | `fs-idg-art` | ② | 🟡 지시 보냄 |
-| ④ | 숫자 · 저장 설계 → `data/upgrades.js` · 물건 184개 `data/catalog.js` · «?» 드래곤 숫자 · 돈 맞춤 | 핵심 보조 (Opus) | `fs-idg-castle` `feat/idg-castle` · `iandragon/docs/IDG_UPGRADES_SPEC.md` | 검토 결과 | ⬜ 검토 뒤 시작 |
+| ④ | 숫자 · 저장 설계 → `data/upgrades.js` · 물건 184개 `data/catalog.js` · «?» 드래곤 숫자 · 돈 맞춤 | 핵심 보조 (Opus) | `fs-idg-castle` `feat/idg-castle` 2bbe7d7 · `IDG_UPGRADES_SPEC.md` e705a57 | 검토 결과 | ✅ |
 | ⑤ | 전투 계산 : 수호 불꽃 · 캐슬 단계 · 장비 · 꾸미기 효과(1/5) + 정답표 | 핵심 보조 (Opus) | `iandragon-diff` 위에 · `fs-idg-castle` | ④ · ⓪ S | ⬜ |
 | ⑥a | 아이템 샵 · 꾸미기 창 위 메뉴 | 겜보조 1 | `fs-idg-shop` `feat/idg-shop` | ④ 의 모양(먼저 기획서 숫자로) | 🟡 |
 | ⑥b | 드래곤 구매 · 레벨 · 브레스 힘/사거리 · 캐슬 단계 · 장비 창 | 겜보조 2 | `fs-idg-upg` `feat/idg-upgrade-ui` | ④ 의 모양 | 🟡 |
@@ -64,3 +64,5 @@
 | 11/13 | ① 판정 4건 비교 사진 → 대표님께 보냄(`docs/verdict/`) · 판정 대기 |
 | 11/13 | PC CPU 100% — S 의 refit 11병렬 → 전부 끄고 «동시 2개 이하» 규칙 |
 | 메모 | 코어(⑤) 할 일 : `battleSetup.js` 의 `leaderFor` 를 `lead.own` 기준으로 · 로비(⑦) 할 일 : 테두리 · 칭호 고르기를 프로필 창으로 |
+| 11/13 | ⓪ D 끝(7ad090e · 5bef786) — 남은 것 : S 판 자료 커밋 · lvgift 9장 r2:sync · 별 코인 덤(어려움 · 초고수) |
+| 11/13 | ④ 끝 — 꾸미기 184 · 얻는 곳 없는 물건 0 · 어려움 3 ~ 4판마다 1개 · 초고수 젬 크게 안 남음. **결정** : 어려움 코인 부족 88만 → ① 어려움 · 초고수에도 별 코인 덤(+35만) ② 나머지는 ⑩ 다시 맞춤 때 «권장 캐슬 키우기»를 어려움 벌이 안으로 |
